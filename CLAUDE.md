@@ -15,7 +15,7 @@ The group has 158 members and contains audio recordings (m4a/mp3) shared informa
 
 ## Project Stages
 
-### Stage 1 — Scrape Metadata (no audio download yet)
+### Stage 1 — Scrape Metadata (no audio download yet) 🔄 IN PROGRESS
 Use Telethon to scrape ALL messages from the group. For every audio message, collect full context and save as raw JSON. Do NOT download audio files yet.
 
 ### Stage 2 — Analyze the Raw Data
