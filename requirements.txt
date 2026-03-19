@@ -2,3 +2,4 @@ telethon
 python-dotenv
 anthropic
 supabase
+boto3
