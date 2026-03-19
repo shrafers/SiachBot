@@ -13,7 +13,11 @@
       "Skill(claude-api)",
       "Skill(claude-api:*)",
       "Bash(python -:*)",
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "Bash(python3 analyze_data.py)",
+      "Bash(pip show:*)",
+      "Bash(python3 -c \"import pyluach\")",
+      "Bash(pip install:*)"
     ]
   }
 }
