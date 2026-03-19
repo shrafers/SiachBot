@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python list_groups.py)",
+      "Bash(python3 list_groups.py)",
+      "Bash(pip3 install:*)",
+      "Bash(python3 -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 list_groups.py)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python3 -c \":*)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(python -:*)",
+      "Bash(python -c \":*)"
+    ]
+  }
+}
