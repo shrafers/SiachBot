@@ -23,7 +23,7 @@ The group has 158 members and contains audio recordings (m4a/mp3) shared informa
 | 1 | Scrape metadata | ✅ Done |
 | 2 | Analyze raw data | ✅ Done |
 | 3 | Tag with Claude API | ✅ Done |
-| 4 | Design DB + Import | 🔄 In Progress |
+| 4 | Design DB + Import | ✅ Done |
 | 5 | Download audio files | ⬜ Pending |
 | 6a | Bot core | ⬜ Pending |
 | 6b | Bot smart features | ⬜ Pending |
@@ -31,7 +31,7 @@ The group has 158 members and contains audio recordings (m4a/mp3) shared informa
 
 ---
 
-## Stage 4 — Design Database + Import 🔄 IN PROGRESS
+## Stage 4 — Design Database + Import ✅ DONE
 
 ### Goal
 Design a Supabase schema that serves the bot's search and browse needs, then import tagged_recordings.json. The schema must reflect all facets the bot will query — do not design it as a flat dump.
