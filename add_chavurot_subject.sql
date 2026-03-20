@@ -26,5 +26,22 @@ BEGIN
     ('חבורת פנימיות',      sa_id),
     ('חבורת שותים',        sa_id)
   ON CONFLICT (name) DO NOTHING;
+
+  -- Link existing chavura recordings to the new sub-disciplines + subject area.
+  -- The chavurot table has the same names as the new sub_disciplines rows,
+  -- so we join through chavurot.name = sub_disciplines.name.
+  UPDATE recordings r
+  SET
+    sub_discipline_id = sd.id,
+    subject_area_id   = sa_id
+  FROM chavurot c
+  JOIN sub_disciplines sd
+    ON sd.name = c.name
+   AND sd.subject_area_id = sa_id
+  WHERE r.chavura_id = c.id;
+
+  RAISE NOTICE 'Updated % recordings', (
+    SELECT COUNT(*) FROM recordings WHERE subject_area_id = sa_id
+  );
 END;
 $$;
