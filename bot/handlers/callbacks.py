@@ -133,7 +133,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await _handle_like(update, context, recording_id=data["id"])
 
     # ------------------------------------------------------------------
-    # Upload flow
+    # Browse — subject areas (main menu entry point)
+    # ------------------------------------------------------------------
+    elif action == "browse_subjects":
+        await browse.show_subject_areas(update, context)
+
+    # ------------------------------------------------------------------
+    # Upload flow — confirm / edit / cancel
     # ------------------------------------------------------------------
     elif action == "up_confirm":
         await upload_handlers.confirm_upload(update, context)
@@ -143,6 +149,36 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif action == "up_cancel":
         await upload_handlers.cancel_upload(update, context)
+
+    # ------------------------------------------------------------------
+    # Upload flow — teacher selection
+    # ------------------------------------------------------------------
+    elif action == "up_tea":
+        await upload_handlers.handle_teacher_selected(update, context, teacher_id=data["id"])
+
+    elif action == "up_tea_oth":
+        await upload_handlers.handle_teacher_other(update, context)
+
+    elif action == "up_tea_back":
+        await upload_handlers.handle_teacher_back(update, context)
+
+    elif action == "up_tea_new":
+        await upload_handlers.handle_teacher_new(update, context)
+
+    # ------------------------------------------------------------------
+    # Upload flow — subject area + sub-discipline selection
+    # ------------------------------------------------------------------
+    elif action == "up_subj":
+        await upload_handlers.handle_subject_selected(update, context, subject_area_id=data["id"])
+
+    elif action == "up_subj_back":
+        await upload_handlers.handle_subject_back(update, context)
+
+    elif action == "up_sub":
+        await upload_handlers.handle_subdiscipline_selected(update, context, sub_id=data["id"])
+
+    elif action == "up_sub_new":
+        await upload_handlers.handle_subdiscipline_new(update, context)
 
     # ------------------------------------------------------------------
     # Admin review

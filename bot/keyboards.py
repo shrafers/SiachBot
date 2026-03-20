@@ -19,10 +19,11 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📚 לפי מרצה", callback_data=encode_cb("browse_teachers", p=0)),
         ],
         [
+            InlineKeyboardButton("📂 לפי תחום", callback_data=encode_cb("browse_subjects")),
             InlineKeyboardButton("📖 סדרות", callback_data=encode_cb("browse_series", p=0)),
-            InlineKeyboardButton("🕐 אחרונים", callback_data=encode_cb("recent")),
         ],
         [
+            InlineKeyboardButton("🕐 אחרונים", callback_data=encode_cb("recent")),
             InlineKeyboardButton("⬆️ העלאת שיעור", callback_data=encode_cb("upload_prompt")),
         ],
     ])
@@ -225,6 +226,68 @@ def confirm_upload_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton("✏️ ערוך", callback_data=encode_cb("up_edit")),
         InlineKeyboardButton("❌ בטל", callback_data=encode_cb("up_cancel")),
     ]])
+
+
+def upload_teacher_keyboard(main_teachers: list[dict], has_others: bool) -> InlineKeyboardMarkup:
+    """Teachers with 10+ lessons as main buttons; optional 'אחרים' + 'מרצה חדש'."""
+    rows = []
+    # Two teachers per row to save space
+    for i in range(0, len(main_teachers), 2):
+        row = []
+        for t in main_teachers[i:i+2]:
+            row.append(InlineKeyboardButton(
+                t["name"],
+                callback_data=encode_cb("up_tea", id=t["id"]),
+            ))
+        rows.append(row)
+    extra = []
+    if has_others:
+        extra.append(InlineKeyboardButton("אחרים ▼", callback_data=encode_cb("up_tea_oth")))
+    extra.append(InlineKeyboardButton("➕ מרצה חדש", callback_data=encode_cb("up_tea_new")))
+    rows.append(extra)
+    rows.append([InlineKeyboardButton("❌ בטל", callback_data=encode_cb("up_cancel"))])
+    return InlineKeyboardMarkup(rows)
+
+
+def upload_teacher_other_keyboard(other_teachers: list[dict]) -> InlineKeyboardMarkup:
+    """Less common teachers (< 10 lessons)."""
+    rows = []
+    for i in range(0, len(other_teachers), 2):
+        row = []
+        for t in other_teachers[i:i+2]:
+            row.append(InlineKeyboardButton(
+                t["name"],
+                callback_data=encode_cb("up_tea", id=t["id"]),
+            ))
+        rows.append(row)
+    rows.append([InlineKeyboardButton("➕ מרצה חדש", callback_data=encode_cb("up_tea_new"))])
+    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("up_tea_back"))])
+    return InlineKeyboardMarkup(rows)
+
+
+def upload_subject_keyboard(areas: list[dict]) -> InlineKeyboardMarkup:
+    """Subject area selection during upload."""
+    rows = []
+    for area in areas:
+        rows.append([InlineKeyboardButton(
+            area["name"],
+            callback_data=encode_cb("up_subj", id=area["id"]),
+        )])
+    rows.append([InlineKeyboardButton("❌ בטל", callback_data=encode_cb("up_cancel"))])
+    return InlineKeyboardMarkup(rows)
+
+
+def upload_subdiscipline_keyboard(subs: list[dict], subject_area_id: int) -> InlineKeyboardMarkup:
+    """Sub-discipline selection during upload, with 'new' option."""
+    rows = []
+    for sub in subs:
+        rows.append([InlineKeyboardButton(
+            sub["name"],
+            callback_data=encode_cb("up_sub", id=sub["id"]),
+        )])
+    rows.append([InlineKeyboardButton("➕ תת-תחום חדש", callback_data=encode_cb("up_sub_new"))])
+    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("up_subj_back"))])
+    return InlineKeyboardMarkup(rows)
 
 
 # ---------------------------------------------------------------------------
