@@ -24,9 +24,9 @@ The group has 158 members and contains audio recordings (m4a/mp3) shared informa
 | 2 | Analyze raw data | ✅ Done |
 | 3 | Tag with Claude API | ✅ Done |
 | 4 | Design DB + Import | ✅ Done |
-| 5 | Download audio files | ⬜ Pending |
-| 6a | Bot core | ⬜ Pending |
-| 6b | Bot smart features | ⬜ Pending |
+| 5 | Download audio files | 🔄 In Progress |
+| 6a | Bot core | ✅ Done |
+| 6b | Bot smart features | 🔄 In Progress |
 | 7 | Ongoing ingestion | ⬜ Pending |
 
 ---
@@ -157,102 +157,107 @@ Download all audio files from Telegram to Cloudflare R2. Update DB records.
 
 ---
 
-## Stage 6a — Bot Core ⬜ PENDING
+## Stage 6a — Bot Core ✅ DONE
 
 ### Goal
 A working Telegram bot: browse, search, download, and upload lessons.
 
 ### Commands
 - `/start` — main menu
-- `/search [text]` — free text search
+- `/search [text]` — free text search (title full-text via Postgres)
 - `/series` — browse series index
 - `/teacher` — browse teachers list
-- `/upload` — upload a new lesson
+- `/review` — admin review queue (ADMIN_CHAT_ID only)
 
 ### Main Menu (inline keyboard)
 ```
-🔍 חיפוש     📚 עיון לפי מוסר שיעור
-📖 סדרות     🕐 שיעורים אחרונים
+🔍 חיפוש     📚 לפי מרצה
+📂 לפי תחום  📖 סדרות
+🕐 אחרונים
 ⬆️ העלאת שיעור
 ```
 
-### Browse Flow
-- By teacher → sorted by recording count descending → tap teacher → list their recordings
-- By subject area → 8 areas → tap area → sub-disciplines (only those with 5+ recordings; rest under "אחר") → results
-- By chavura → list of chavurot → results
+### Browse Flows (implemented)
+- **By teacher** → sorted by recording count → tap teacher → subject areas for that teacher (+ 🕐 אחרונים) → sub-disciplines → recordings
+- **By subject area** → all subject areas → tap area → sub-disciplines (+ 🕐 אחרונים for that area) → recordings
+- **By series** → all series → tap → recordings ordered by lesson_number
+- **Recent** → last 10 recordings by created_at
 
-### Search Logic (no AI call — use Postgres)
-Query across: title, series name, teacher name, sub_discipline name, studied_figures, tags.
-Use `to_tsvector('simple', ...)` for Hebrew full-text. Also do substring match on teacher name.
-
-Ranking order:
-1. Exact series name match
-2. Exact teacher name match
-3. Title full-text match
-4. Tag / studied figure match
-5. Fuzzy / partial match
-
-High-confidence results rank above low-confidence at each tier.
-
-After results appear, show quick filter buttons:
-`הכל` | `סדרות בלבד` | `שיעורים בודדים`
+### Search Logic
+- Postgres `to_tsvector('simple', title)` full-text search, sorted by date DESC
+- Filter buttons: `הכל` | `סדרות בלבד` | `שיעורים בודדים`
+- **⚠️ Still needed (Stage 6b):** expand search to cover teacher name, series name, sub-discipline, tags, studied figures
 
 ### Result Card Format
 ```
 📖 כותרת השיעור
 👤 מרצה  |  📚 סדרה — שיעור X  |  📅 תאריך
 🏷 תג1, תג2
+⏱ משך
 ```
-Buttons: `⬇ הורדה` | `עוד כמו זה` | `◀ הקודם  הבא ▶` (series only)
-
-Show `⚠️ מידע לא מאומת` label under cards with `confidence = 'low'`.
-
-Pagination: 3–5 results per page with `→ הבא` / `← הקודם` buttons.
+Buttons: `⬇ הורדה` | `עוד כמו זה` | `◀ הקודם  הבא ▶`
 
 ### Download
-When user taps ⬇ הורדה:
-- If `audio_r2_path` exists → send the file from R2
-- If not yet downloaded → reply: "הקובץ עדיין לא הורד, שלח לינק טלגרם" + `telegram_link`
+- If `audio_r2_path` exists → download from R2 (private bucket) and send bytes via bot
+- If not yet downloaded → send `telegram_link` as fallback
 
-### Upload Flow (new lesson)
-1. User sends audio file (or forwards from group) to bot, optionally with a caption
-2. Bot replies: "מעבד..." — calls Claude API with filename + caption to extract: title, teacher, subject, series, lesson_number
-3. Bot shows extracted metadata as a preview:
-   ```
-   📖 [כותרת]
-   👤 [מרצה]  |  📚 [סדרה — שיעור X]
-   ✅ אשר   ✏️ ערוך   ❌ בטל
-   ```
-4. On ✅ confirm: upload audio to R2 → insert into DB with `confidence = 'medium'`, `needs_human_review = true` → notify ADMIN_CHAT_ID
-5. On ✏️ edit: bot asks user to correct each field one by one, then confirm
-6. On ❌ cancel: discard
+### Upload Flow (no Claude API — fully manual)
+1. User sends audio file (or forwards from group)
+2. Forwarded files: check `message_id` in DB → if found, show existing record (no re-tagging)
+3. New file: step-by-step form with buttons and text inputs:
+   - **מוסר שיעור** *(mandatory)* — buttons: teachers with 10+ lessons | אחרים | מרצה חדש
+   - **תחום** *(mandatory)* — buttons: all subject areas
+   - **תת-תחום** *(mandatory)* — buttons: sub-disciplines for chosen area | תת-תחום חדש
+   - **כותרת השיעור** *(mandatory)* — free text
+   - **סדרה** *(optional)* — buttons: teacher's existing series | שיעור בודד | סדרה חדשה
+   - **מספר שיעור** *(optional, auto-skipped if no series)* — free text or דלג ⏭
+   - **הערות** *(optional)* — free text or דלג ⏭
+4. Preview summary → ✅ אשר | ✏️ ערוך (restart form) | ❌ בטל
+5. On confirm: upload to R2 → insert with `needs_human_review = true` → notify ADMIN_CHAT_ID
 
-### Commit when done
-`git commit -m "stage6a: bot core — browse, search, download, upload"`
+### Admin Review Queue
+`/review` — shows one `needs_human_review = true` record at a time
+Buttons: `✅ אשר` | `✏️ ערוך` | `⏭ דלג`
+
+### Sorting
+All lists sort by date DESC. Confidence is not used for display or ranking.
 
 ---
 
-## Stage 6b — Bot Smart Features ⬜ PENDING
+## Stage 6b — Bot Smart Features 🔄 IN PROGRESS
 
 ### Goal
 Layer discovery and quality tools on top of the working core.
 
-### Features
+### Already Done (in 6a)
+- ✅ Admin review queue (`/review` command)
+- ✅ Recently added (`🕐 אחרונים` → last 10 by `created_at DESC`)
+- ✅ Series navigation prev/next buttons on result cards
+- ✅ "עוד כמו זה" — basic version: same series → same teacher fallback
 
-**עוד כמו זה button:**
-Query by strongest shared facet in order: same series → same teacher + subject → same studied figure. Return a fresh result page.
+### Still Needed
 
-**Series navigation:**
-When displaying a result that belongs to a series, always show `◀ הקודם  הבא ▶` buttons. On the series index page, show total lessons and flag missing numbers: `⚠️ חסרים שיעורים: 4, 7`.
+**Free text search — expand coverage:**
+Currently only searches `title` via `to_tsvector`. Must expand to:
+- Teacher name (substring match on `teachers.name`)
+- Series name (`series.name`)
+- Sub-discipline name (`sub_disciplines.name`)
+- Tags (`recording_tags.tag`)
+- Studied figures (`studied_figures.name`)
 
-**Admin review queue:**
-`/review` command (admin only, checks ADMIN_CHAT_ID). Shows one `needs_human_review = true` record at a time with buttons: `✅ אשר` | `✏️ ערוך` | `⏭ דלג`. On approve: sets `needs_human_review = false`.
+Best approach: Supabase RPC `search_recordings(query text, page int, filter text)` that does a UNION or multi-join search and returns ranked results (date DESC).
 
-**Recently added:**
-Main menu `🕐 אחרונים` → last 10 records by `created_at DESC`.
+**"עוד כמו זה" — full logic:**
+Current: same series → same teacher.
+Full logic: same series → same teacher + same subject_area → same studied_figure.
+Implement as a ranked fallback chain, each returning a fresh result page.
+
+**Series gap detection:**
+On the series detail page, compare `lesson_number` values against expected sequence.
+Show: `⚠️ חסרים שיעורים: 4, 7` when gaps exist.
 
 ### Commit when done
-`git commit -m "stage6b: smart features — discovery, series gaps, review queue"`
+`git commit -m "stage6b: smart features — full search, discovery, series gaps"`
 
 ---
 
