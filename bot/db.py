@@ -118,6 +118,19 @@ def get_chavurot() -> list[dict]:
     return resp.data or []
 
 
+def get_series_by_teacher(teacher_id: int) -> list[dict]:
+    """All series taught by a specific teacher, sorted by name."""
+    sb = get_supabase()
+    resp = (
+        sb.table("series")
+        .select("id, name, total_lessons")
+        .eq("teacher_id", teacher_id)
+        .order("name")
+        .execute()
+    )
+    return resp.data or []
+
+
 def get_subject_areas_by_teacher(teacher_id: int) -> list[dict]:
     """Subject areas that have recordings for a specific teacher, with counts."""
     sb = get_supabase()

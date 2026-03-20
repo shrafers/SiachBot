@@ -16,6 +16,8 @@ from ..keyboards import (
     upload_teacher_other_keyboard,
     upload_subject_keyboard,
     upload_subdiscipline_keyboard,
+    upload_series_keyboard,
+    upload_skip_keyboard,
 )
 
 load_dotenv()
@@ -26,17 +28,20 @@ ADMIN_CHAT_ID = int(os.environ.get("ADMIN_CHAT_ID", "0"))
 TEACHER_THRESHOLD = 10
 
 # ---------------------------------------------------------------------------
-# Form steps — teacher/subject/sub_discipline use buttons; rest use text
+# Form steps
+# input_mode: 'buttons' | 'text'
+# mandatory: if False, skip button is shown; step can be skipped
 # ---------------------------------------------------------------------------
 
 STEPS = [
-    # (key, label, mandatory, input_mode)  input_mode: 'buttons' | 'text'
-    ("teacher",        "בחר מוסר שיעור:",                              True,  "buttons"),
-    ("subject_area",   "בחר תחום:",                                    True,  "buttons"),
-    ("sub_discipline", "בחר תת-תחום:",                                 True,  "buttons"),
-    ("series_name",    "שם הסדרה (או 'דלג' אם שיעור בודד)",           False, "text"),
-    ("lesson_number",  "מספר שיעור בסדרה (או 'דלג')",                 False, "text"),
-    ("notes",          "הערות נוספות (או 'דלג')",                       False, "text"),
+    # key             label                                  mandatory  input_mode
+    ("teacher",        "בחר מוסר שיעור:",                    True,      "buttons"),
+    ("subject_area",   "בחר תחום:",                          True,      "buttons"),
+    ("sub_discipline", "בחר תת-תחום:",                       True,      "buttons"),
+    ("title",          "כותרת השיעור:",                       True,      "text"),
+    ("series",         "בחר סדרה:",                          False,     "buttons"),
+    ("lesson_number",  "מספר שיעור בסדרה:",                  False,     "text"),
+    ("notes",          "הערות נוספות:",                       False,     "text"),
 ]
 
 MANDATORY_KEYS = {step[0] for step in STEPS if step[2]}
@@ -94,11 +99,17 @@ async def _ask_step(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
     state = context.user_data["upload"]
     step = state["step"]
 
+    # Skip lesson_number if no series was selected
+    if step < len(STEPS) and STEPS[step][0] == "lesson_number":
+        if not state["form"].get("series_name"):
+            state["step"] += 1
+            step = state["step"]
+
     if step >= len(STEPS):
         await _show_preview(msg, context)
         return
 
-    key, label, _, input_mode = STEPS[step]
+    key, label, mandatory, input_mode = STEPS[step]
 
     if input_mode == "buttons":
         if key == "teacher":
@@ -107,9 +118,14 @@ async def _ask_step(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
             await _ask_subject(msg, context)
         elif key == "sub_discipline":
             await _ask_subdiscipline(msg, context)
+        elif key == "series":
+            await _ask_series(msg, context)
     else:
-        suffix = " (אופציונלי — שלח 'דלג' לדילוג)" if not STEPS[step][2] else ""
-        await msg.reply_text(f"📝 {label}{suffix}")
+        # Text step — show skip button for optional ones
+        if mandatory:
+            await msg.reply_text(f"📝 {label}")
+        else:
+            await msg.reply_text(f"📝 {label}", reply_markup=upload_skip_keyboard())
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +133,7 @@ async def _ask_step(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
 # ---------------------------------------------------------------------------
 
 async def _ask_teacher(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
-    all_teachers = db.get_teacher_list()  # sorted by count DESC
+    all_teachers = db.get_teacher_list()
     main = [t for t in all_teachers if (t.get("count") or 0) >= TEACHER_THRESHOLD]
     others = [t for t in all_teachers if (t.get("count") or 0) < TEACHER_THRESHOLD]
     await msg.reply_text(
@@ -139,10 +155,7 @@ async def _ask_subject(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _ask_subdiscipline(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
     state = context.user_data["upload"]
     subject_area_id = state["form"].get("subject_area_id")
-    if subject_area_id:
-        subs = db.get_sub_disciplines(subject_area_id)
-    else:
-        subs = []
+    subs = db.get_sub_disciplines(subject_area_id) if subject_area_id else []
     await msg.reply_text(
         "📋 *בחר תת-תחום:*",
         parse_mode="Markdown",
@@ -150,12 +163,22 @@ async def _ask_subdiscipline(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def _ask_series(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
+    state = context.user_data["upload"]
+    teacher_id = state["form"].get("teacher_id")
+    series = db.get_series_by_teacher(teacher_id) if teacher_id else []
+    await msg.reply_text(
+        "📚 *בחר סדרה:*",
+        parse_mode="Markdown",
+        reply_markup=upload_series_keyboard(series),
+    )
+
+
 # ---------------------------------------------------------------------------
-# Callback handlers (called from callbacks.py)
+# Callback handlers — teacher
 # ---------------------------------------------------------------------------
 
 async def handle_teacher_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int) -> None:
-    """User tapped a known teacher button."""
     all_teachers = db.get_teacher_list()
     teacher = next((t for t in all_teachers if t["id"] == teacher_id), None)
     if not teacher:
@@ -170,7 +193,6 @@ async def handle_teacher_selected(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def handle_teacher_other(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show the 'other teachers' keyboard."""
     all_teachers = db.get_teacher_list()
     others = [t for t in all_teachers if (t.get("count") or 0) < TEACHER_THRESHOLD]
     await update.callback_query.answer()
@@ -182,20 +204,17 @@ async def handle_teacher_other(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def handle_teacher_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Back from 'other teachers' to main teacher list."""
     await update.callback_query.answer()
     await _ask_teacher(update.callback_query.message, context)
 
 
 async def handle_teacher_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """User wants to enter a new teacher name."""
     await update.callback_query.answer()
     context.user_data["awaiting"] = "upload_new_teacher"
     await update.callback_query.message.reply_text("✏️ הקלד שם המרצה החדש:")
 
 
 async def handle_new_teacher_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Receive free-text teacher name."""
     state = context.user_data.get("upload")
     if not state:
         return
@@ -207,8 +226,11 @@ async def handle_new_teacher_text(update: Update, context: ContextTypes.DEFAULT_
     await _ask_step(update.message, context)
 
 
+# ---------------------------------------------------------------------------
+# Callback handlers — subject area
+# ---------------------------------------------------------------------------
+
 async def handle_subject_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, subject_area_id: int) -> None:
-    """User tapped a subject area button."""
     areas = db.get_subject_areas()
     area = next((a for a in areas if a["id"] == subject_area_id), None)
     if not area:
@@ -223,19 +245,20 @@ async def handle_subject_selected(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def handle_subject_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Back from sub-disciplines to subject area selection."""
     state = context.user_data.get("upload")
     if state:
         state["step"] = max(0, state["step"] - 1)
-        # Clear sub_discipline since we're going back
         state["form"].pop("sub_discipline", None)
         state["form"].pop("sub_discipline_id", None)
     await update.callback_query.answer()
     await _ask_subject(update.callback_query.message, context)
 
 
+# ---------------------------------------------------------------------------
+# Callback handlers — sub-discipline
+# ---------------------------------------------------------------------------
+
 async def handle_subdiscipline_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, sub_id: int) -> None:
-    """User tapped a sub-discipline button."""
     state = context.user_data["upload"]
     subject_area_id = state["form"].get("subject_area_id")
     subs = db.get_sub_disciplines(subject_area_id) if subject_area_id else []
@@ -251,14 +274,12 @@ async def handle_subdiscipline_selected(update: Update, context: ContextTypes.DE
 
 
 async def handle_subdiscipline_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """User wants to enter a new sub-discipline."""
     await update.callback_query.answer()
     context.user_data["awaiting"] = "upload_new_subdiscipline"
     await update.callback_query.message.reply_text("✏️ הקלד שם התת-תחום החדש:")
 
 
 async def handle_new_subdiscipline_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Receive free-text sub-discipline name."""
     state = context.user_data.get("upload")
     if not state:
         return
@@ -271,7 +292,73 @@ async def handle_new_subdiscipline_text(update: Update, context: ContextTypes.DE
 
 
 # ---------------------------------------------------------------------------
-# Text form handler (for optional steps: series, lesson_number, notes)
+# Callback handlers — series
+# ---------------------------------------------------------------------------
+
+async def handle_series_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, series_id: int) -> None:
+    state = context.user_data["upload"]
+    teacher_id = state["form"].get("teacher_id")
+    series_list = db.get_series_by_teacher(teacher_id) if teacher_id else []
+    series = next((s for s in series_list if s["id"] == series_id), None)
+    if not series:
+        await update.callback_query.answer("סדרה לא נמצאה.")
+        return
+    state["form"]["series_name"] = series["name"]
+    state["form"]["series_id"] = series_id
+    state["step"] += 1
+    await update.callback_query.answer()
+    await _ask_step(update.callback_query.message, context)
+
+
+async def handle_series_standalone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """User chose 'standalone lesson' — skip series and lesson_number."""
+    state = context.user_data["upload"]
+    state["form"]["series_name"] = None
+    state["form"]["series_id"] = None
+    # Advance past series AND lesson_number steps
+    state["step"] += 2
+    await update.callback_query.answer()
+    await _ask_step(update.callback_query.message, context)
+
+
+async def handle_series_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.callback_query.answer()
+    context.user_data["awaiting"] = "upload_new_series"
+    await update.callback_query.message.reply_text("✏️ הקלד שם הסדרה החדשה:")
+
+
+async def handle_new_series_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    state = context.user_data.get("upload")
+    if not state:
+        return
+    name = update.message.text.strip()
+    state["form"]["series_name"] = name
+    state["form"]["series_id"] = None
+    state["step"] += 1
+    context.user_data["awaiting"] = "upload_form"
+    await _ask_step(update.message, context)
+
+
+# ---------------------------------------------------------------------------
+# Skip handler (optional text steps)
+# ---------------------------------------------------------------------------
+
+async def handle_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    state = context.user_data.get("upload")
+    if not state:
+        await update.callback_query.answer()
+        return
+    step = state["step"]
+    if step < len(STEPS):
+        key = STEPS[step][0]
+        state["form"][key] = None
+    state["step"] += 1
+    await update.callback_query.answer()
+    await _ask_step(update.callback_query.message, context)
+
+
+# ---------------------------------------------------------------------------
+# Text form handler (mandatory title + optional text steps)
 # ---------------------------------------------------------------------------
 
 async def handle_form_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -282,19 +369,12 @@ async def handle_form_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     msg = update.message
     text = msg.text.strip()
     step = state["step"]
-    key, _, mandatory, _ = STEPS[step]
+    key = STEPS[step][0]
 
-    if text.lower() in ("דלג", "skip"):
-        if mandatory:
-            await msg.reply_text("⚠️ שדה זה חובה. אנא בחר מהאפשרויות:")
-            await _ask_step(msg, context)
-            return
-        state["form"][key] = None
+    if key == "lesson_number":
+        state["form"][key] = int(text) if text.isdigit() else None
     else:
-        if key == "lesson_number":
-            state["form"][key] = int(text) if text.isdigit() else None
-        else:
-            state["form"][key] = text
+        state["form"][key] = text
 
     state["step"] += 1
     await _ask_step(msg, context)
@@ -306,8 +386,7 @@ async def handle_form_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def _show_preview(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
     state = context.user_data["upload"]
-    form = state["form"]
-    preview = _format_preview(form, state["filename"])
+    preview = _format_preview(state["form"], state["filename"])
     await msg.reply_text(
         f"📋 *סיכום השיעור:*\n\n{preview}\n\nהאם לשמור?",
         parse_mode="Markdown",
@@ -349,7 +428,7 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await r2.upload_audio(audio_bytes, r2_path)
 
-    title = form.get("series_name") or form.get("teacher") or filename
+    title = form.get("title") or form.get("series_name") or form.get("teacher") or filename
     notes = form.get("notes")
     if notes:
         title = f"{title} — {notes}"
@@ -419,6 +498,8 @@ def _format_preview(form: dict, filename: str = "") -> str:
         lines.append(f"📂 {form['subject_area']}")
     if form.get("sub_discipline"):
         lines.append(f"📋 {form['sub_discipline']}")
+    if form.get("title"):
+        lines.append(f"📖 {form['title']}")
     series = form.get("series_name")
     lesson = form.get("lesson_number")
     if series:

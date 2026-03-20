@@ -18,7 +18,7 @@ from .handlers.search import search_command, handle_search_text
 from .handlers.browse import series_command, teacher_command
 from .handlers.upload import (
     handle_audio, handle_form_reply,
-    handle_new_teacher_text, handle_new_subdiscipline_text,
+    handle_new_teacher_text, handle_new_subdiscipline_text, handle_new_series_text,
 )
 from .handlers.admin import review_command
 from .handlers.callbacks import handle_callback
@@ -46,6 +46,8 @@ async def _text_router(update: Update, context) -> None:
         await handle_new_teacher_text(update, context)
     elif awaiting == "upload_new_subdiscipline":
         await handle_new_subdiscipline_text(update, context)
+    elif awaiting == "upload_new_series":
+        await handle_new_series_text(update, context)
     else:
         # Unrecognised text — show main menu hint
         from .handlers.start import WELCOME

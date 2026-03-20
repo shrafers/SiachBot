@@ -181,6 +181,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await upload_handlers.handle_subdiscipline_new(update, context)
 
     # ------------------------------------------------------------------
+    # Upload flow — series selection
+    # ------------------------------------------------------------------
+    elif action == "up_ser":
+        await upload_handlers.handle_series_selected(update, context, series_id=data["id"])
+
+    elif action == "up_ser_none":
+        await upload_handlers.handle_series_standalone(update, context)
+
+    elif action == "up_ser_new":
+        await upload_handlers.handle_series_new(update, context)
+
+    # ------------------------------------------------------------------
+    # Upload flow — skip optional step
+    # ------------------------------------------------------------------
+    elif action == "up_skip":
+        await upload_handlers.handle_skip(update, context)
+
+    # ------------------------------------------------------------------
     # Admin review
     # ------------------------------------------------------------------
     elif action == "rev_ok":

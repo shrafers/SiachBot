@@ -24,6 +24,8 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("🕐 אחרונים", callback_data=encode_cb("recent")),
+        ],
+        [
             InlineKeyboardButton("⬆️ העלאת שיעור", callback_data=encode_cb("upload_prompt")),
         ],
     ])
@@ -273,6 +275,30 @@ def upload_subject_keyboard(areas: list[dict]) -> InlineKeyboardMarkup:
             area["name"],
             callback_data=encode_cb("up_subj", id=area["id"]),
         )])
+    rows.append([InlineKeyboardButton("❌ בטל", callback_data=encode_cb("up_cancel"))])
+    return InlineKeyboardMarkup(rows)
+
+
+def upload_skip_keyboard() -> InlineKeyboardMarkup:
+    """Single skip button for optional text steps."""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("דלג ⏭", callback_data=encode_cb("up_skip")),
+        InlineKeyboardButton("❌ בטל", callback_data=encode_cb("up_cancel")),
+    ]])
+
+
+def upload_series_keyboard(series: list[dict]) -> InlineKeyboardMarkup:
+    """Series selection: existing series, standalone option, new series."""
+    rows = []
+    for s in series:
+        label = s["name"]
+        if s.get("total_lessons"):
+            label += f" ({s['total_lessons']} שיעורים)"
+        rows.append([InlineKeyboardButton(label, callback_data=encode_cb("up_ser", id=s["id"]))])
+    rows.append([
+        InlineKeyboardButton("📌 שיעור בודד", callback_data=encode_cb("up_ser_none")),
+        InlineKeyboardButton("➕ סדרה חדשה", callback_data=encode_cb("up_ser_new")),
+    ])
     rows.append([InlineKeyboardButton("❌ בטל", callback_data=encode_cb("up_cancel"))])
     return InlineKeyboardMarkup(rows)
 
