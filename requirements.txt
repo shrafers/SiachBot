@@ -3,3 +3,4 @@ python-dotenv
 anthropic
 supabase
 boto3
+python-telegram-bot[job-queue]

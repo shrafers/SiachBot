@@ -171,8 +171,8 @@ A working Telegram bot: browse, search, download, and upload lessons.
 
 ### Main Menu (inline keyboard)
 ```
-🔍 חיפוש     📚 עיון לפי מרצה
-📖 סדרות     🕐 אחרונים
+🔍 חיפוש     📚 עיון לפי מוסר שיעור
+📖 סדרות     🕐 שיעורים אחרונים
 ⬆️ העלאת שיעור
 ```
 

@@ -1,0 +1,237 @@
+"""Central CallbackQueryHandler — decodes callback data and routes to handlers."""
+
+import io
+
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from .. import db, r2
+from ..keyboards import main_menu_keyboard, search_filter_keyboard, back_to_main
+from ..utils import decode_cb, format_result_card
+from . import browse, search as search_handlers, upload as upload_handlers, admin as admin_handlers
+from .search import _do_search
+
+
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        data = decode_cb(query.data)
+    except Exception:
+        return
+
+    action = data.get("a")
+
+    # ------------------------------------------------------------------
+    # Main menu
+    # ------------------------------------------------------------------
+    if action == "main_menu":
+        await query.message.reply_text("תפריט ראשי:", reply_markup=main_menu_keyboard())
+
+    elif action == "search_prompt":
+        context.user_data["awaiting"] = "search_query"
+        await query.message.reply_text("הקלד את מונח החיפוש:")
+
+    elif action == "upload_prompt":
+        context.user_data["awaiting"] = "upload_audio"
+        await query.message.reply_text("שלח קובץ שמע (mp3/m4a/ogg) עם כיתוב אופציונלי:")
+
+    # ------------------------------------------------------------------
+    # Browse — teachers
+    # ------------------------------------------------------------------
+    elif action == "browse_teachers":
+        await browse.show_teacher_list(update, context, page=data.get("p", 0))
+
+    elif action == "teacher_recs":
+        await browse.show_teacher_recordings(update, context, teacher_id=data["id"], page=data.get("p", 0))
+
+    # ------------------------------------------------------------------
+    # Browse — series
+    # ------------------------------------------------------------------
+    elif action == "browse_series":
+        await browse.show_series_list(update, context, page=data.get("p", 0))
+
+    elif action == "series_recs":
+        await browse.show_series_recordings(update, context, series_id=data["id"], page=data.get("p", 0))
+
+    # ------------------------------------------------------------------
+    # Browse — subject areas / sub-disciplines
+    # ------------------------------------------------------------------
+    elif action == "browse_subj":
+        await browse.show_sub_disciplines(update, context, subject_area_id=data["id"])
+
+    elif action == "browse_subj_back":
+        await browse.show_subject_areas(update, context)
+
+    elif action == "browse_sub":
+        await browse.show_sub_discipline_recordings(update, context, sub_discipline_id=data["id"], page=data.get("p", 0))
+
+    # ------------------------------------------------------------------
+    # Browse — chavurot
+    # ------------------------------------------------------------------
+    elif action == "browse_chav":
+        chav_id = data.get("id")
+        if chav_id:
+            await browse.show_chavura_recordings(update, context, chavura_id=chav_id, page=data.get("p", 0))
+        else:
+            await browse.show_chavurot(update, context)
+
+    # ------------------------------------------------------------------
+    # Recent
+    # ------------------------------------------------------------------
+    elif action == "recent":
+        await browse.show_recent(update, context)
+
+    # ------------------------------------------------------------------
+    # Search pagination & filter
+    # ------------------------------------------------------------------
+    elif action == "search_page":
+        state = context.user_data.get("search", {})
+        q = data.get("q") or state.get("query", "")
+        f = data.get("f") or state.get("filter", "all")
+        p = data.get("p", 0)
+        await _do_search(update, context, query=q, page=p, filter_type=f)
+
+    elif action == "search_filter":
+        state = context.user_data.get("search", {})
+        q = state.get("query", "")
+        f = data.get("f", "all")
+        if q:
+            await _do_search(update, context, query=q, page=0, filter_type=f)
+
+    # ------------------------------------------------------------------
+    # Download
+    # ------------------------------------------------------------------
+    elif action == "dl":
+        await _handle_download(update, context, recording_id=data["id"])
+
+    # ------------------------------------------------------------------
+    # "More like this"
+    # ------------------------------------------------------------------
+    elif action == "like":
+        await _handle_like(update, context, recording_id=data["id"])
+
+    # ------------------------------------------------------------------
+    # Upload flow
+    # ------------------------------------------------------------------
+    elif action == "up_confirm":
+        await upload_handlers.confirm_upload(update, context)
+
+    elif action == "up_edit":
+        await upload_handlers.start_edit(update, context)
+
+    elif action == "up_cancel":
+        await upload_handlers.cancel_upload(update, context)
+
+    # ------------------------------------------------------------------
+    # Admin review
+    # ------------------------------------------------------------------
+    elif action == "rev_ok":
+        await admin_handlers.review_approve(update, context, recording_id=data["id"])
+
+    elif action == "rev_skip":
+        await admin_handlers.review_skip(update, context, recording_id=data["id"])
+
+    elif action == "rev_edit":
+        # Load the recording into upload state and start edit flow
+        rec = db.get_recording(data["id"])
+        if rec:
+            context.user_data["upload"] = {
+                "file_id": None,
+                "filename": rec.get("filename", ""),
+                "caption": "",
+                "file_size": rec.get("file_size_bytes"),
+                "duration": rec.get("duration_seconds"),
+                "metadata": {
+                    "title": rec.get("title"),
+                    "teacher": rec.get("teacher_name"),
+                    "subject_area": rec.get("sub_discipline_name"),
+                    "series_name": rec.get("series_name"),
+                    "lesson_number": rec.get("lesson_number"),
+                    "thematic_tags": rec.get("tags", []),
+                },
+                "edit_field_idx": 0,
+                "review_recording_id": data["id"],
+            }
+            context.user_data["awaiting"] = "upload_edit"
+            await upload_handlers.start_edit(update, context)
+
+    elif action == "noop":
+        pass  # pagination counter button — do nothing
+
+
+# ---------------------------------------------------------------------------
+# Download logic
+# ---------------------------------------------------------------------------
+
+async def _handle_download(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, recording_id: int
+) -> None:
+    rec = db.get_recording(recording_id)
+    if not rec:
+        await update.callback_query.message.reply_text("שיעור לא נמצא.")
+        return
+
+    if rec.get("audio_r2_path"):
+        await update.callback_query.message.reply_text("מוריד קובץ... ⏳")
+        try:
+            audio_bytes = await r2.get_audio_bytes(rec["audio_r2_path"])
+            filename = rec.get("filename") or f"shiur_{recording_id}.m4a"
+            await update.callback_query.message.reply_document(
+                document=io.BytesIO(audio_bytes),
+                filename=filename,
+                caption=rec.get("title") or filename,
+            )
+        except Exception as e:
+            await update.callback_query.message.reply_text(f"שגיאה בהורדה: {e}")
+    else:
+        link = rec.get("telegram_link") or "לא זמין"
+        await update.callback_query.message.reply_text(
+            f"הקובץ עדיין לא הורד.\nלינק טלגרם: {link}",
+            reply_markup=back_to_main(),
+        )
+
+
+# ---------------------------------------------------------------------------
+# "More like this" logic
+# ---------------------------------------------------------------------------
+
+async def _handle_like(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, recording_id: int
+) -> None:
+    from .results import send_results_page
+    from ..utils import total_pages as _total_pages
+
+    rec = db.get_recording(recording_id)
+    if not rec:
+        return
+
+    # Priority: same series > same teacher + subject > default by teacher
+    if rec.get("series_id"):
+        results = db.get_recordings_by_series(rec["series_id"], page=0)
+        total = db.count_by_series(rec["series_id"])
+        header = f"📚 עוד מהסדרה: *{rec.get('series_name', '')}*"
+        ctx_action = "series_recs"
+        ctx_id = rec["series_id"]
+    elif rec.get("teacher_id"):
+        results = db.get_recordings_by_teacher(rec["teacher_id"], page=0)
+        total = db.count_by_teacher(rec["teacher_id"])
+        teacher = rec.get("teacher_name") or ""
+        header = f"👤 עוד מ: *{teacher}*"
+        ctx_action = "teacher_recs"
+        ctx_id = rec["teacher_id"]
+    else:
+        await update.callback_query.message.reply_text("לא נמצאו שיעורים דומים.")
+        return
+
+    tp = _total_pages(total, db.PAGE_SIZE)
+    await send_results_page(
+        update, context,
+        results=results,
+        header=header,
+        context_action=ctx_action,
+        context_id=ctx_id,
+        page=0,
+        total_pages=tp,
+    )
