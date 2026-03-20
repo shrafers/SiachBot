@@ -63,9 +63,6 @@ def format_result_card(rec: dict) -> str:
     if duration:
         lines.append(f"⏱ {format_duration(duration)}")
 
-    if rec.get("confidence") == "low":
-        lines.append("⚠️ _מידע לא מאומת_")
-
     return "\n".join(lines)
 
 

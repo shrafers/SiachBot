@@ -16,7 +16,7 @@ from telegram.ext import (
 from .handlers.start import start
 from .handlers.search import search_command, handle_search_text
 from .handlers.browse import series_command, teacher_command
-from .handlers.upload import handle_audio, handle_edit_reply
+from .handlers.upload import handle_audio, handle_form_reply
 from .handlers.admin import review_command
 from .handlers.callbacks import handle_callback
 
@@ -37,8 +37,8 @@ async def _text_router(update: Update, context) -> None:
 
     if awaiting == "search_query":
         await handle_search_text(update, context)
-    elif awaiting == "upload_edit":
-        await handle_edit_reply(update, context)
+    elif awaiting == "upload_form":
+        await handle_form_reply(update, context)
     else:
         # Unrecognised text — show main menu hint
         from .handlers.start import WELCOME

@@ -36,12 +36,11 @@ def search_recordings(query: str, page: int = 0, filter_type: str = "all") -> li
     q = (
         sb.table("recordings")
         .select(
-            "id, message_id, title, date, hebrew_date, confidence, is_oneoff, "
+            "id, message_id, title, date, hebrew_date, is_oneoff, "
             "audio_downloaded, audio_r2_path, telegram_link, lesson_number, duration_seconds, "
             "teachers(name), series(name), sub_disciplines(name), chavurot(name)"
         )
         .text_search("title", query, config="simple")
-        .order("confidence", desc=False)   # high < medium < low alphabetically — use custom below
         .order("date", desc=True)
         .range(offset, offset + PAGE_SIZE - 1)
     )
@@ -119,13 +118,56 @@ def get_chavurot() -> list[dict]:
     return resp.data or []
 
 
+def get_subject_areas_by_teacher(teacher_id: int) -> list[dict]:
+    """Subject areas that have recordings for a specific teacher, with counts."""
+    sb = get_supabase()
+    resp = sb.rpc("subject_areas_by_teacher", {"p_teacher_id": teacher_id}).execute()
+    return resp.data or []
+
+
+def get_sub_disciplines_by_teacher_and_subject(teacher_id: int, subject_area_id: int) -> list[dict]:
+    """Sub-disciplines with recordings for a specific teacher + subject area."""
+    sb = get_supabase()
+    resp = sb.rpc("sub_disciplines_by_teacher_and_subject", {
+        "p_teacher_id": teacher_id,
+        "p_subject_area_id": subject_area_id,
+    }).execute()
+    return resp.data or []
+
+
+def get_recent_by_subject_area(subject_area_id: int, limit: int = 10) -> list[dict]:
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select(_recording_select())
+        .eq("subject_area_id", subject_area_id)
+        .order("date", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return _flatten_joins(resp.data or [])
+
+
+def get_recent_by_teacher(teacher_id: int, limit: int = 10) -> list[dict]:
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select(_recording_select())
+        .eq("teacher_id", teacher_id)
+        .order("date", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return _flatten_joins(resp.data or [])
+
+
 # ---------------------------------------------------------------------------
 # Recording lists by facet
 # ---------------------------------------------------------------------------
 
 def _recording_select():
     return (
-        "id, message_id, title, date, hebrew_date, confidence, is_oneoff, "
+        "id, message_id, title, date, hebrew_date, is_oneoff, "
         "audio_downloaded, audio_r2_path, telegram_link, lesson_number, duration_seconds, "
         "teachers(name), series(name), sub_disciplines(name), chavurot(name)"
     )
@@ -281,7 +323,6 @@ def needs_review_next(skip_ids: list[int] | None = None) -> dict | None:
         sb.table("recordings")
         .select(_recording_select())
         .eq("needs_human_review", True)
-        .order("confidence", desc=True)
         .order("date", desc=True)
         .limit(1)
     )

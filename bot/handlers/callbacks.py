@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 from .. import db, r2
 from ..keyboards import main_menu_keyboard, search_filter_keyboard, back_to_main
 from ..utils import decode_cb, format_result_card
-from . import browse, search as search_handlers, upload as upload_handlers, admin as admin_handlers
+from . import browse, upload as upload_handlers, admin as admin_handlers
 from .search import _do_search
 
 
@@ -44,7 +44,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await browse.show_teacher_list(update, context, page=data.get("p", 0))
 
     elif action == "teacher_recs":
+        # Tap on a teacher name → show subject areas for that teacher
+        await browse.show_teacher_subjects(update, context, teacher_id=data["id"])
+
+    elif action == "teacher_recent":
+        # "Recent" button on teacher subject page → all recent by teacher
         await browse.show_teacher_recordings(update, context, teacher_id=data["id"], page=data.get("p", 0))
+
+    elif action == "teacher_subj":
+        # Tap on a subject area within a teacher → sub-disciplines
+        await browse.show_teacher_sub_disciplines(update, context, teacher_id=data["tid"], subject_area_id=data["sid"])
+
+    elif action == "teacher_subj_back":
+        # Back from sub-disciplines → teacher subject areas
+        await browse.show_teacher_subjects(update, context, teacher_id=data["id"])
+
+    elif action == "teacher_subj_recent":
+        # "Recent" on teacher+subject sub-discipline page
+        await browse.show_teacher_subject_recent(update, context, teacher_id=data["tid"], subject_area_id=data["sid"])
 
     # ------------------------------------------------------------------
     # Browse — series
@@ -63,6 +80,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif action == "browse_subj_back":
         await browse.show_subject_areas(update, context)
+
+    elif action == "subj_recent":
+        await browse.show_subject_area_recent(update, context, subject_area_id=data["id"])
 
     elif action == "browse_sub":
         await browse.show_sub_discipline_recordings(update, context, sub_discipline_id=data["id"], page=data.get("p", 0))
@@ -119,7 +139,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await upload_handlers.confirm_upload(update, context)
 
     elif action == "up_edit":
-        await upload_handlers.start_edit(update, context)
+        await upload_handlers.restart_form(update, context)
 
     elif action == "up_cancel":
         await upload_handlers.cancel_upload(update, context)
@@ -134,7 +154,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await admin_handlers.review_skip(update, context, recording_id=data["id"])
 
     elif action == "rev_edit":
-        # Load the recording into upload state and start edit flow
+        # Load the recording into upload state and restart the form
         rec = db.get_recording(data["id"])
         if rec:
             context.user_data["upload"] = {
@@ -143,19 +163,19 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 "caption": "",
                 "file_size": rec.get("file_size_bytes"),
                 "duration": rec.get("duration_seconds"),
-                "metadata": {
-                    "title": rec.get("title"),
+                "form": {
                     "teacher": rec.get("teacher_name"),
                     "subject_area": rec.get("sub_discipline_name"),
+                    "sub_discipline": rec.get("sub_discipline_name"),
                     "series_name": rec.get("series_name"),
                     "lesson_number": rec.get("lesson_number"),
-                    "thematic_tags": rec.get("tags", []),
+                    "notes": None,
                 },
-                "edit_field_idx": 0,
+                "step": 0,
                 "review_recording_id": data["id"],
             }
-            context.user_data["awaiting"] = "upload_edit"
-            await upload_handlers.start_edit(update, context)
+            context.user_data["awaiting"] = "upload_form"
+            await upload_handlers.restart_form(update, context)
 
     elif action == "noop":
         pass  # pagination counter button — do nothing
