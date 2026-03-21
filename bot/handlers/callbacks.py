@@ -248,17 +248,41 @@ async def _handle_download(
         return
 
     if rec.get("audio_r2_path"):
-        await update.callback_query.message.reply_text("מוריד קובץ... ⏳")
-        try:
-            audio_bytes = await r2.get_audio_bytes(rec["audio_r2_path"])
-            filename = rec.get("filename") or f"shiur_{recording_id}.m4a"
-            await update.callback_query.message.reply_document(
-                document=io.BytesIO(audio_bytes),
-                filename=filename,
-                caption=rec.get("title") or filename,
-            )
-        except Exception as e:
-            await update.callback_query.message.reply_text(f"שגיאה בהורדה: {e}")
+        file_size = rec.get("file_size_bytes") or 0
+        filename = rec.get("filename") or f"shiur_{recording_id}.m4a"
+        caption = rec.get("title") or filename
+
+        # Telegram bot API limit is 50MB; use presigned URL for large files
+        if file_size > 20 * 1024 * 1024:
+            try:
+                url = await r2.get_presigned_url(rec["audio_r2_path"], expires_in=3600)
+                await update.callback_query.message.reply_text(
+                    f"📥 הקובץ גדול מדי לשליחה ישירה.\nלחץ להורדה: [הורד שיעור]({url})",
+                    parse_mode="Markdown",
+                )
+            except Exception as e:
+                await update.callback_query.message.reply_text(f"שגיאה בהורדה: {e}")
+        else:
+            await update.callback_query.message.reply_text("מוריד קובץ... ⏳")
+            try:
+                audio_bytes = await r2.get_audio_bytes(rec["audio_r2_path"])
+                await update.callback_query.message.reply_document(
+                    document=io.BytesIO(audio_bytes),
+                    filename=filename,
+                    caption=caption,
+                )
+            except Exception as e:
+                if "Request Entity Too Large" in str(e):
+                    try:
+                        url = await r2.get_presigned_url(rec["audio_r2_path"], expires_in=3600)
+                        await update.callback_query.message.reply_text(
+                            f"הקובץ גדול מדי לשליחה ישירה.\n[לחץ להורדה]({url})",
+                            parse_mode="Markdown",
+                        )
+                    except Exception as e2:
+                        await update.callback_query.message.reply_text(f"שגיאה בהורדה: {e2}")
+                else:
+                    await update.callback_query.message.reply_text(f"שגיאה בהורדה: {e}")
     else:
         link = rec.get("telegram_link") or "לא זמין"
         await update.callback_query.message.reply_text(

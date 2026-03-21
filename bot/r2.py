@@ -53,3 +53,18 @@ def upload_audio_sync(data: bytes, r2_path: str) -> None:
 async def upload_audio(data: bytes, r2_path: str) -> None:
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, upload_audio_sync, data, r2_path)
+
+
+def _presign_sync(r2_path: str, expires_in: int) -> str:
+    bucket = os.environ["R2_BUCKET_NAME"]
+    return _get_s3().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket, "Key": r2_path},
+        ExpiresIn=expires_in,
+    )
+
+
+async def get_presigned_url(r2_path: str, expires_in: int = 3600) -> str:
+    """Generate a presigned URL for an R2 object (default 1 hour expiry)."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _presign_sync, r2_path, expires_in)

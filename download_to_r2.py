@@ -119,6 +119,7 @@ async def download_one(client: TelegramClient, s3, sb: Client, rec: dict, index:
         sb.table("recordings").update({
             "audio_r2_path": path,
             "audio_downloaded": True,
+            "file_size_bytes": len(data),
         }).eq("message_id", message_id).execute()
     except Exception as e:
         print(f"  {prefix} ERROR updating DB: {e}")
