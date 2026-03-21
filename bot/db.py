@@ -243,6 +243,32 @@ def count_by_sub_discipline(sub_discipline_id: int) -> int:
     return resp.count or 0
 
 
+def get_recordings_by_teacher_and_sub_discipline(teacher_id: int, sub_discipline_id: int, page: int = 0) -> list[dict]:
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select(_recording_select())
+        .eq("teacher_id", teacher_id)
+        .eq("sub_discipline_id", sub_discipline_id)
+        .order("date", desc=True)
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+        .execute()
+    )
+    return _flatten_joins(resp.data or [])
+
+
+def count_by_teacher_and_sub_discipline(teacher_id: int, sub_discipline_id: int) -> int:
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select("id", count="exact", head=True)
+        .eq("teacher_id", teacher_id)
+        .eq("sub_discipline_id", sub_discipline_id)
+        .execute()
+    )
+    return resp.count or 0
+
+
 def get_recordings_by_chavura(chavura_id: int, page: int = 0) -> list[dict]:
     sb = get_supabase()
     resp = (

@@ -214,6 +214,26 @@ async def show_sub_disciplines(
     )
 
 
+async def show_teacher_sub_discipline_recordings(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int, sub_discipline_id: int, page: int
+) -> None:
+    results = db.get_recordings_by_teacher_and_sub_discipline(teacher_id, sub_discipline_id, page)
+    total = db.count_by_teacher_and_sub_discipline(teacher_id, sub_discipline_id)
+    tp = total_pages(total, db.PAGE_SIZE)
+
+    teacher_name = results[0]["teacher_name"] if results else f"מרצה {teacher_id}"
+    sub_name = results[0]["sub_discipline_name"] if results else f"תת-תחום {sub_discipline_id}"
+    await send_results_page(
+        update, context,
+        results=results,
+        header=f"👤 *{teacher_name}* — 📂 *{sub_name}* — {total} שיעורים, עמוד {page+1}/{tp}",
+        context_action="teacher_sub_recs",
+        context_id=sub_discipline_id,
+        page=page,
+        total_pages=tp,
+    )
+
+
 async def show_sub_discipline_recordings(
     update: Update, context: ContextTypes.DEFAULT_TYPE, sub_discipline_id: int, page: int
 ) -> None:

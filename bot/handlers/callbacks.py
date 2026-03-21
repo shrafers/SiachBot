@@ -85,6 +85,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif action == "subj_recent":
         await browse.show_subject_area_recent(update, context, subject_area_id=data["id"])
 
+    elif action == "teacher_sub_recs":
+        await browse.show_teacher_sub_discipline_recordings(
+            update, context, teacher_id=data["tid"], sub_discipline_id=data["id"], page=data.get("p", 0)
+        )
+
     elif action == "browse_sub":
         await browse.show_sub_discipline_recordings(update, context, sub_discipline_id=data["id"], page=data.get("p", 0))
 

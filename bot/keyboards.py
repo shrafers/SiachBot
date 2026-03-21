@@ -90,10 +90,11 @@ def sub_discipline_keyboard(subs: list[dict], subject_area_id: int, teacher_id: 
     for sub in subs:
         count = sub.get("count", "")
         label = f"{sub['name']} ({count})" if count else sub["name"]
-        rows.append([InlineKeyboardButton(
-            label,
-            callback_data=encode_cb("browse_sub", id=sub["id"]),
-        )])
+        if teacher_id:
+            cb = encode_cb("teacher_sub_recs", tid=teacher_id, id=sub["id"])
+        else:
+            cb = encode_cb("browse_sub", id=sub["id"])
+        rows.append([InlineKeyboardButton(label, callback_data=cb)])
     if teacher_id:
         back_cb = encode_cb("teacher_subj_back", id=teacher_id)
     else:
