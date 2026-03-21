@@ -1,6 +1,7 @@
 """Central CallbackQueryHandler — decodes callback data and routes to handlers."""
 
 import io
+import os
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -249,8 +250,17 @@ async def _handle_download(
 
     if rec.get("audio_r2_path"):
         file_size = rec.get("file_size_bytes") or 0
-        filename = rec.get("filename") or f"shiur_{recording_id}.m4a"
-        caption = rec.get("title") or filename
+        ext = os.path.splitext(rec.get("filename") or ".m4a")[1] or ".m4a"
+        title_part = rec.get("title") or ""
+        teacher_part = rec.get("teacher_name") or ""
+        if title_part and teacher_part:
+            display_name = f"{title_part} - {teacher_part}{ext}"
+        elif title_part:
+            display_name = f"{title_part}{ext}"
+        else:
+            display_name = rec.get("filename") or f"shiur_{recording_id}{ext}"
+        filename = display_name
+        caption = rec.get("title") or display_name
 
         # Telegram bot API limit is 50MB; use presigned URL for large files
         if file_size > 20 * 1024 * 1024:
