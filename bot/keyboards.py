@@ -15,18 +15,24 @@ from .db import PAGE_SIZE, LIST_SIZE
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🔍 חיפוש", callback_data=encode_cb("search_prompt")),
-            InlineKeyboardButton("📚 לפי מרצה", callback_data=encode_cb("browse_teachers", p=0)),
+            InlineKeyboardButton(
+                "🔍 חיפוש", callback_data=encode_cb("search_prompt")),
+            InlineKeyboardButton(
+                "📚 לפי מרצה", callback_data=encode_cb("browse_teachers", p=0)),
         ],
         [
-            InlineKeyboardButton("📂 לפי תחום", callback_data=encode_cb("browse_subjects")),
-            InlineKeyboardButton("📖 סדרות", callback_data=encode_cb("browse_series", p=0)),
+            InlineKeyboardButton(
+                "📂 לפי תחום", callback_data=encode_cb("browse_subjects")),
+            InlineKeyboardButton(
+                "📖 סדרות", callback_data=encode_cb("browse_series", p=0)),
         ],
         [
-            InlineKeyboardButton("🕐 אחרונים", callback_data=encode_cb("recent")),
+            InlineKeyboardButton(
+                "🕐 אחרונים", callback_data=encode_cb("recent")),
         ],
         [
-            InlineKeyboardButton("⬆️ העלאת שיעור", callback_data=encode_cb("upload_prompt")),
+            InlineKeyboardButton(
+                "⬆️ העלאת שיעור", callback_data=encode_cb("upload_prompt")),
         ],
     ])
 
@@ -58,9 +64,11 @@ def teacher_subject_keyboard(areas: list[dict], teacher_id: int) -> InlineKeyboa
         label = f"{area['name']} ({count})" if count else area["name"]
         rows.append([InlineKeyboardButton(
             label,
-            callback_data=encode_cb("teacher_subj", tid=teacher_id, sid=area["id"]),
+            callback_data=encode_cb(
+                "teacher_subj", tid=teacher_id, sid=area["id"]),
         )])
-    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("browse_teachers", p=0))])
+    rows.append([InlineKeyboardButton(
+        "🔙 חזרה", callback_data=encode_cb("browse_teachers", p=0))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -71,7 +79,8 @@ def sub_discipline_keyboard(subs: list[dict], subject_area_id: int, teacher_id: 
     if teacher_id:
         rows.append([InlineKeyboardButton(
             "🕐 אחרונים",
-            callback_data=encode_cb("teacher_subj_recent", tid=teacher_id, sid=subject_area_id),
+            callback_data=encode_cb(
+                "teacher_subj_recent", tid=teacher_id, sid=subject_area_id),
         )])
     else:
         rows.append([InlineKeyboardButton(
@@ -102,7 +111,8 @@ def chavurot_keyboard(chavurot: list[dict]) -> InlineKeyboardMarkup:
             label,
             callback_data=encode_cb("browse_chav", id=c["id"]),
         )])
-    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("main_menu"))])
+    rows.append([InlineKeyboardButton(
+        "🔙 חזרה", callback_data=encode_cb("main_menu"))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -120,7 +130,8 @@ def teacher_list_keyboard(teachers: list[dict], page: int, total: int) -> Inline
             callback_data=encode_cb("teacher_recs", id=t["id"], p=0),
         )])
     rows.append(_pagination_row("browse_teachers", page, total, LIST_SIZE))
-    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("main_menu"))])
+    rows.append([InlineKeyboardButton(
+        "🔙 חזרה", callback_data=encode_cb("main_menu"))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -136,7 +147,8 @@ def series_list_keyboard(series: list[dict], page: int, total: int) -> InlineKey
             callback_data=encode_cb("series_recs", id=s["id"], p=0),
         )])
     rows.append(_pagination_row("browse_series", page, total, LIST_SIZE))
-    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("main_menu"))])
+    rows.append([InlineKeyboardButton(
+        "🔙 חזרה", callback_data=encode_cb("main_menu"))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -157,8 +169,10 @@ def result_card_keyboard(
 
     # Download button
     rows.append([
-        InlineKeyboardButton("⬇ הורדה", callback_data=encode_cb("dl", id=rec["id"])),
-        InlineKeyboardButton("עוד כמו זה", callback_data=encode_cb("like", id=rec["id"])),
+        InlineKeyboardButton(
+            "⬇ הורדה", callback_data=encode_cb("dl", id=rec["id"])),
+        InlineKeyboardButton(
+            "עוד כמו זה", callback_data=encode_cb("like", id=rec["id"])),
     ])
 
     # Prev / Next within series
@@ -167,12 +181,14 @@ def result_card_keyboard(
         if page > 0:
             nav_row.append(InlineKeyboardButton(
                 "◀ הקודם",
-                callback_data=encode_cb("series_recs", id=rec["series_id"], p=page - 1),
+                callback_data=encode_cb(
+                    "series_recs", id=rec["series_id"], p=page - 1),
             ))
         if page < total_pages - 1:
             nav_row.append(InlineKeyboardButton(
                 "הבא ▶",
-                callback_data=encode_cb("series_recs", id=rec["series_id"], p=page + 1),
+                callback_data=encode_cb(
+                    "series_recs", id=rec["series_id"], p=page + 1),
             ))
         if nav_row:
             rows.append(nav_row)
@@ -180,10 +196,12 @@ def result_card_keyboard(
         # Generic pagination for search/browse context
         nav_row = []
         if context_action and page > 0:
-            cb = _build_page_cb(context_action, page - 1, context_id, context_query, context_filter)
+            cb = _build_page_cb(context_action, page - 1,
+                                context_id, context_query, context_filter)
             nav_row.append(InlineKeyboardButton("◀ הקודם", callback_data=cb))
         if context_action and page < total_pages - 1:
-            cb = _build_page_cb(context_action, page + 1, context_id, context_query, context_filter)
+            cb = _build_page_cb(context_action, page + 1,
+                                context_id, context_query, context_filter)
             nav_row.append(InlineKeyboardButton("הבא ▶", callback_data=cb))
         if nav_row:
             rows.append(nav_row)
@@ -244,10 +262,13 @@ def upload_teacher_keyboard(main_teachers: list[dict], has_others: bool) -> Inli
         rows.append(row)
     extra = []
     if has_others:
-        extra.append(InlineKeyboardButton("אחרים ▼", callback_data=encode_cb("up_tea_oth")))
-    extra.append(InlineKeyboardButton("➕ מרצה חדש", callback_data=encode_cb("up_tea_new")))
+        extra.append(InlineKeyboardButton(
+            "אחרים ▼", callback_data=encode_cb("up_tea_oth")))
+    extra.append(InlineKeyboardButton(
+        "➕ מרצה חדש", callback_data=encode_cb("up_tea_new")))
     rows.append(extra)
-    rows.append([InlineKeyboardButton("❌ בטל", callback_data=encode_cb("up_cancel"))])
+    rows.append([InlineKeyboardButton(
+        "❌ בטל", callback_data=encode_cb("up_cancel"))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -262,8 +283,10 @@ def upload_teacher_other_keyboard(other_teachers: list[dict]) -> InlineKeyboardM
                 callback_data=encode_cb("up_tea", id=t["id"]),
             ))
         rows.append(row)
-    rows.append([InlineKeyboardButton("➕ מרצה חדש", callback_data=encode_cb("up_tea_new"))])
-    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("up_tea_back"))])
+    rows.append([InlineKeyboardButton(
+        "➕ מרצה חדש", callback_data=encode_cb("up_tea_new"))])
+    rows.append([InlineKeyboardButton(
+        "🔙 חזרה", callback_data=encode_cb("up_tea_back"))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -275,7 +298,8 @@ def upload_subject_keyboard(areas: list[dict]) -> InlineKeyboardMarkup:
             area["name"],
             callback_data=encode_cb("up_subj", id=area["id"]),
         )])
-    rows.append([InlineKeyboardButton("❌ בטל", callback_data=encode_cb("up_cancel"))])
+    rows.append([InlineKeyboardButton(
+        "❌ בטל", callback_data=encode_cb("up_cancel"))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -294,12 +318,16 @@ def upload_series_keyboard(series: list[dict]) -> InlineKeyboardMarkup:
         label = s["name"]
         if s.get("total_lessons"):
             label += f" ({s['total_lessons']} שיעורים)"
-        rows.append([InlineKeyboardButton(label, callback_data=encode_cb("up_ser", id=s["id"]))])
+        rows.append([InlineKeyboardButton(
+            label, callback_data=encode_cb("up_ser", id=s["id"]))])
     rows.append([
-        InlineKeyboardButton("📌 שיעור בודד", callback_data=encode_cb("up_ser_none")),
-        InlineKeyboardButton("➕ סדרה חדשה", callback_data=encode_cb("up_ser_new")),
+        InlineKeyboardButton(
+            "📌 ללא סדרה", callback_data=encode_cb("up_ser_none")),
+        InlineKeyboardButton(
+            "➕ סדרה חדשה", callback_data=encode_cb("up_ser_new")),
     ])
-    rows.append([InlineKeyboardButton("❌ בטל", callback_data=encode_cb("up_cancel"))])
+    rows.append([InlineKeyboardButton(
+        "❌ בטל", callback_data=encode_cb("up_cancel"))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -311,8 +339,10 @@ def upload_subdiscipline_keyboard(subs: list[dict], subject_area_id: int) -> Inl
             sub["name"],
             callback_data=encode_cb("up_sub", id=sub["id"]),
         )])
-    rows.append([InlineKeyboardButton("➕ תת-תחום חדש", callback_data=encode_cb("up_sub_new"))])
-    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("up_subj_back"))])
+    rows.append([InlineKeyboardButton("➕ תת-תחום חדש",
+                callback_data=encode_cb("up_sub_new"))])
+    rows.append([InlineKeyboardButton(
+        "🔙 חזרה", callback_data=encode_cb("up_subj_back"))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -322,9 +352,12 @@ def upload_subdiscipline_keyboard(subs: list[dict], subject_area_id: int) -> Inl
 
 def review_keyboard(recording_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("✅ אשר", callback_data=encode_cb("rev_ok", id=recording_id)),
-        InlineKeyboardButton("✏️ ערוך", callback_data=encode_cb("rev_edit", id=recording_id)),
-        InlineKeyboardButton("⏭ דלג", callback_data=encode_cb("rev_skip", id=recording_id)),
+        InlineKeyboardButton("✅ אשר", callback_data=encode_cb(
+            "rev_ok", id=recording_id)),
+        InlineKeyboardButton("✏️ ערוך", callback_data=encode_cb(
+            "rev_edit", id=recording_id)),
+        InlineKeyboardButton("⏭ דלג", callback_data=encode_cb(
+            "rev_skip", id=recording_id)),
     ]])
 
 
@@ -334,7 +367,8 @@ def review_keyboard(recording_id: int) -> InlineKeyboardMarkup:
 
 def back_to_main() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("🔙 תפריט ראשי", callback_data=encode_cb("main_menu"))
+        InlineKeyboardButton(
+            "🔙 תפריט ראשי", callback_data=encode_cb("main_menu"))
     ]])
 
 
@@ -346,8 +380,11 @@ def _pagination_row(action: str, page: int, total: int, page_size: int) -> list[
     total_p = max(1, math.ceil(total / page_size))
     row = []
     if page > 0:
-        row.append(InlineKeyboardButton("◀ הקודם", callback_data=encode_cb(action, p=page - 1)))
-    row.append(InlineKeyboardButton(f"{page + 1}/{total_p}", callback_data="noop"))
+        row.append(InlineKeyboardButton(
+            "◀ הקודם", callback_data=encode_cb(action, p=page - 1)))
+    row.append(InlineKeyboardButton(
+        f"{page + 1}/{total_p}", callback_data="noop"))
     if page < total_p - 1:
-        row.append(InlineKeyboardButton("הבא ▶", callback_data=encode_cb(action, p=page + 1)))
+        row.append(InlineKeyboardButton(
+            "הבא ▶", callback_data=encode_cb(action, p=page + 1)))
     return row
