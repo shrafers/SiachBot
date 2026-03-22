@@ -60,7 +60,7 @@ def main() -> None:
     builder = Application.builder().token(token)
     local_server = os.environ.get("TELEGRAM_LOCAL_SERVER")
     if local_server:
-        builder = builder.local_mode(True).base_url(f"{local_server}/bot")
+        builder = builder.local_mode(True).base_url(f"{local_server}/bot").base_file_url(f"{local_server}/file/bot")
     app = builder.build()
 
     # Commands
