@@ -17,7 +17,19 @@
       "Bash(python3 analyze_data.py)",
       "Bash(pip show:*)",
       "Bash(python3 -c \"import pyluach\")",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(npm error:*)",
+      "Bash(railway --version)",
+      "Bash(railway whoami:*)",
+      "Bash(railway login:*)",
+      "Bash(railway link:*)",
+      "Bash(railway list:*)",
+      "Bash(railway status:*)",
+      "Bash(railway service:*)",
+      "Bash(railway variables:*)",
+      "Bash(railway ps:*)",
+      "Bash(railway --help)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }
