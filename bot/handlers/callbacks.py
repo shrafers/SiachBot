@@ -104,6 +104,23 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await browse.show_chavurot(update, context)
 
     # ------------------------------------------------------------------
+    # Browse — by zman (Hebrew year + semester)
+    # ------------------------------------------------------------------
+    elif action == "browse_zmanim":
+        await browse.show_zmanim(update, context)
+
+    elif action == "zman_year":
+        await browse.show_zman_year(update, context, hebrew_year=data["y"])
+
+    elif action == "zman_recs":
+        await browse.show_zman_recordings(
+            update, context,
+            hebrew_year=data["y"],
+            semester=data["s"],
+            page=data.get("p", 0),
+        )
+
+    # ------------------------------------------------------------------
     # Recent
     # ------------------------------------------------------------------
     elif action == "recent":

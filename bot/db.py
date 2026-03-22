@@ -288,6 +288,46 @@ def count_by_chavura(chavura_id: int) -> int:
     return resp.count or 0
 
 
+def get_hebrew_years() -> list[dict]:
+    """All Hebrew years with recording count, sorted by most recent date first."""
+    sb = get_supabase()
+    resp = sb.rpc("hebrew_years_with_count").execute()
+    return resp.data or []
+
+
+def get_zmanim_by_year(hebrew_year: str) -> list[dict]:
+    """Semesters with recording count for a given Hebrew year."""
+    sb = get_supabase()
+    resp = sb.rpc("zmanim_by_year_with_count", {"p_year": hebrew_year}).execute()
+    return resp.data or []
+
+
+def get_recordings_by_year_and_semester(hebrew_year: str, semester: str, page: int = 0) -> list[dict]:
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select(_recording_select())
+        .eq("hebrew_year", hebrew_year)
+        .eq("semester", semester)
+        .order("date", desc=True)
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+        .execute()
+    )
+    return _flatten_joins(resp.data or [])
+
+
+def count_by_year_and_semester(hebrew_year: str, semester: str) -> int:
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select("id", count="exact", head=True)
+        .eq("hebrew_year", hebrew_year)
+        .eq("semester", semester)
+        .execute()
+    )
+    return resp.count or 0
+
+
 def get_recent_recordings(limit: int = 10) -> list[dict]:
     sb = get_supabase()
     resp = (

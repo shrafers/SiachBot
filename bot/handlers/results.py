@@ -18,6 +18,7 @@ async def send_results_page(
     context_id: int | None = None,
     context_query: str | None = None,
     context_filter: str | None = None,
+    context_extra: dict | None = None,
     filter_keyboard: InlineKeyboardMarkup | None = None,
 ) -> None:
     """Send each result as a separate message with its own inline keyboard."""
@@ -40,6 +41,7 @@ async def send_results_page(
             context_id=context_id,
             context_query=context_query,
             context_filter=context_filter,
+            context_extra=context_extra,
         )
 
         await msg.reply_text(card_text, parse_mode="Markdown", reply_markup=keyboard)

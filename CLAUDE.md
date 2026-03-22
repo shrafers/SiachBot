@@ -252,9 +252,6 @@ Current: same series → same teacher.
 Full logic: same series → same teacher + same subject_area → same studied_figure.
 Implement as a ranked fallback chain, each returning a fresh result page.
 
-**Series gap detection:**
-On the series detail page, compare `lesson_number` values against expected sequence.
-Show: `⚠️ חסרים שיעורים: 4, 7` when gaps exist.
 
 ### Commit when done
 `git commit -m "stage6b: smart features — full search, discovery, series gaps"`

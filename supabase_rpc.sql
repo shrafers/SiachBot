@@ -69,3 +69,25 @@ LANGUAGE sql STABLE AS $$
   GROUP BY c.id
   ORDER BY count DESC, c.name;
 $$;
+
+-- Hebrew years with recording count (sorted by most recent date first)
+CREATE OR REPLACE FUNCTION hebrew_years_with_count()
+RETURNS TABLE(hebrew_year TEXT, count BIGINT)
+LANGUAGE sql STABLE AS $$
+  SELECT hebrew_year, COUNT(id) AS count
+  FROM recordings
+  WHERE hebrew_year IS NOT NULL
+  GROUP BY hebrew_year
+  ORDER BY MAX(date) DESC;
+$$;
+
+-- Semesters for a given Hebrew year with recording count
+CREATE OR REPLACE FUNCTION zmanim_by_year_with_count(p_year TEXT)
+RETURNS TABLE(semester TEXT, count BIGINT)
+LANGUAGE sql STABLE AS $$
+  SELECT semester, COUNT(id) AS count
+  FROM recordings
+  WHERE hebrew_year = p_year AND semester IS NOT NULL
+  GROUP BY semester
+  ORDER BY count DESC;
+$$;

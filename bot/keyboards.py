@@ -28,6 +28,8 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
+                "📅 לפי זמן", callback_data=encode_cb("browse_zmanim")),
+            InlineKeyboardButton(
                 "🕐 אחרונים", callback_data=encode_cb("recent")),
         ],
         [
@@ -154,6 +156,32 @@ def series_list_keyboard(series: list[dict], page: int, total: int) -> InlineKey
 
 
 # ---------------------------------------------------------------------------
+# Browse by Zman (Hebrew year + semester)
+# ---------------------------------------------------------------------------
+
+def hebrew_years_keyboard(years: list[dict]) -> InlineKeyboardMarkup:
+    """List of Hebrew years with recording counts."""
+    rows = []
+    for y in years:
+        label = f"📅 {y['hebrew_year']} ({y['count']})"
+        rows.append([InlineKeyboardButton(
+            label, callback_data=encode_cb("zman_year", y=y["hebrew_year"]))])
+    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("main_menu"))])
+    return InlineKeyboardMarkup(rows)
+
+
+def zmanim_keyboard(zmanim: list[dict], hebrew_year: str) -> InlineKeyboardMarkup:
+    """Semester buttons for a given Hebrew year."""
+    rows = []
+    for z in zmanim:
+        label = f"{z['semester']} ({z['count']})"
+        rows.append([InlineKeyboardButton(
+            label, callback_data=encode_cb("zman_recs", y=hebrew_year, s=z["semester"], p=0))])
+    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=encode_cb("browse_zmanim"))])
+    return InlineKeyboardMarkup(rows)
+
+
+# ---------------------------------------------------------------------------
 # Recording result card keyboard
 # ---------------------------------------------------------------------------
 
@@ -165,6 +193,7 @@ def result_card_keyboard(
     context_id: int | None = None,   # teacher_id / series_id / etc.
     context_query: str | None = None,
     context_filter: str | None = None,
+    context_extra: dict | None = None,  # arbitrary extra kwargs for prev/next callbacks
 ) -> InlineKeyboardMarkup:
     rows = []
 
@@ -198,11 +227,11 @@ def result_card_keyboard(
         nav_row = []
         if context_action and page > 0:
             cb = _build_page_cb(context_action, page - 1,
-                                context_id, context_query, context_filter)
+                                context_id, context_query, context_filter, **(context_extra or {}))
             nav_row.append(InlineKeyboardButton("◀ הקודם", callback_data=cb))
         if context_action and page < total_pages - 1:
             cb = _build_page_cb(context_action, page + 1,
-                                context_id, context_query, context_filter)
+                                context_id, context_query, context_filter, **(context_extra or {}))
             nav_row.append(InlineKeyboardButton("הבא ▶", callback_data=cb))
         if nav_row:
             rows.append(nav_row)
@@ -210,8 +239,8 @@ def result_card_keyboard(
     return InlineKeyboardMarkup(rows)
 
 
-def _build_page_cb(action, page, ctx_id=None, query=None, filter_type=None) -> str:
-    kwargs = {"p": page}
+def _build_page_cb(action, page, ctx_id=None, query=None, filter_type=None, **extra) -> str:
+    kwargs = {"p": page, **extra}
     if ctx_id is not None:
         kwargs["id"] = ctx_id
     if query is not None:

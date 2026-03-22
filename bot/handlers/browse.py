@@ -11,6 +11,8 @@ from ..keyboards import (
     browse_subject_keyboard,
     sub_discipline_keyboard,
     chavurot_keyboard,
+    hebrew_years_keyboard,
+    zmanim_keyboard,
     back_to_main,
 )
 from ..utils import total_pages
@@ -304,6 +306,60 @@ async def show_chavura_recordings(
         header=f"🏠 *{chavura_name}* — {total} שיעורים, עמוד {page+1}/{tp}",
         context_action="browse_chav",
         context_id=chavura_id,
+        page=page,
+        total_pages=tp,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Browse by Zman (Hebrew year + semester)
+# ---------------------------------------------------------------------------
+
+async def show_zmanim(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show list of Hebrew years."""
+    years = db.get_hebrew_years()
+    msg = update.message or update.callback_query.message
+    if not years:
+        await msg.reply_text("אין שיעורים עם שנה עברית.", reply_markup=back_to_main())
+        return
+    await msg.reply_text(
+        "📅 *בחר שנה:*",
+        parse_mode="Markdown",
+        reply_markup=hebrew_years_keyboard(years),
+    )
+
+
+async def show_zman_year(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, hebrew_year: str
+) -> None:
+    """Show semester buttons for a given Hebrew year."""
+    zmanim = db.get_zmanim_by_year(hebrew_year)
+    msg = update.message or update.callback_query.message
+    if not zmanim:
+        await msg.reply_text("אין שיעורים בשנה זו.", reply_markup=back_to_main())
+        return
+    await msg.reply_text(
+        f"📅 *{hebrew_year}* — בחר זמן:",
+        parse_mode="Markdown",
+        reply_markup=zmanim_keyboard(zmanim, hebrew_year),
+    )
+
+
+async def show_zman_recordings(
+    update: Update, context: ContextTypes.DEFAULT_TYPE,
+    hebrew_year: str, semester: str, page: int
+) -> None:
+    """Show recordings for a specific Hebrew year + semester."""
+    results = db.get_recordings_by_year_and_semester(hebrew_year, semester, page)
+    total = db.count_by_year_and_semester(hebrew_year, semester)
+    tp = total_pages(total, db.PAGE_SIZE)
+
+    await send_results_page(
+        update, context,
+        results=results,
+        header=f"📅 *{hebrew_year} — {semester}* — {total} שיעורים, עמוד {page+1}/{tp}",
+        context_action="zman_recs",
+        context_extra={"y": hebrew_year, "s": semester},
         page=page,
         total_pages=tp,
     )
