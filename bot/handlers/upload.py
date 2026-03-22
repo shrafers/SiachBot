@@ -2,9 +2,10 @@
 
 import io
 import os
-from datetime import datetime
+from datetime import datetime, date
 
 from dotenv import load_dotenv
+from pyluach import dates as hebdates
 from telegram import Update, Message
 from telegram.ext import ContextTypes
 
@@ -381,6 +382,42 @@ async def handle_form_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 # ---------------------------------------------------------------------------
+# Hebrew date helpers (mirrors add_hebrew_dates.py logic)
+# ---------------------------------------------------------------------------
+
+_HEBREW_DIGITS = {
+    1: "א", 2: "ב", 3: "ג", 4: "ד", 5: "ה", 6: "ו", 7: "ז", 8: "ח", 9: "ט",
+    10: "י", 11: "יא", 12: "יב", 13: "יג", 14: "יד", 15: "טו", 16: "טז",
+    17: "יז", 18: "יח", 19: "יט", 20: "כ", 21: "כא", 22: "כב", 23: "כג",
+    24: "כד", 25: "כה", 26: "כו", 27: "כז", 28: "כח", 29: "כט", 30: "ל",
+}
+_HEBREW_MONTHS = {
+    1: "ניסן", 2: "אייר", 3: "סיון", 4: "תמוז", 5: "אב", 6: "אלול",
+    7: "תשרי", 8: "חשוון", 9: "כסלו", 10: "טבת", 11: "שבט", 12: "אדר", 13: "אדר ב׳",
+}
+
+
+def _hebrew_date_str(hdate) -> str:
+    day = _HEBREW_DIGITS.get(hdate.day, str(hdate.day))
+    month = _HEBREW_MONTHS[hdate.month]
+    year = hdate.hebrew_date_string().split()[-1]
+    return f"{day} {month} {year}"
+
+
+def _hebrew_year_str(hdate) -> str:
+    return hdate.hebrew_date_string().split()[-1]
+
+
+def _semester(hdate) -> str:
+    m = hdate.month
+    if m in (6, 7):
+        return "אלול"
+    if 2 <= m <= 5:
+        return "קיץ"
+    return "חורף"
+
+
+# ---------------------------------------------------------------------------
 # Preview + confirm
 # ---------------------------------------------------------------------------
 
@@ -422,12 +459,37 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     audio_bytes = buf.getvalue()
 
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "m4a"
-    year = datetime.now().year
+    today = datetime.now().date()
     fake_message_id = int(datetime.now().timestamp())
-    r2_path = f"audio/{year}/{fake_message_id}.{ext}"
+    r2_path = f"audio/{today.year}/{fake_message_id}.{ext}"
 
     await r2.upload_audio(audio_bytes, r2_path)
 
+    # ------------------------------------------------------------------
+    # Resolve entity IDs — create new records if name is new
+    # ------------------------------------------------------------------
+    teacher_id = form.get("teacher_id")
+    if not teacher_id and form.get("teacher"):
+        teacher_id = db.get_or_create_teacher(form["teacher"])
+
+    subject_area_id = form.get("subject_area_id")
+
+    sub_discipline_id = form.get("sub_discipline_id")
+    if not sub_discipline_id and form.get("sub_discipline") and subject_area_id:
+        sub_discipline_id = db.get_or_create_sub_discipline(form["sub_discipline"], subject_area_id)
+
+    series_id = form.get("series_id")
+    if not series_id and form.get("series_name"):
+        series_id = db.get_or_create_series(form["series_name"], teacher_id, subject_area_id)
+
+    # ------------------------------------------------------------------
+    # Hebrew date fields (computed from today's date)
+    # ------------------------------------------------------------------
+    hdate = hebdates.HebrewDate.from_pydate(today)
+
+    # ------------------------------------------------------------------
+    # Build row
+    # ------------------------------------------------------------------
     title = form.get("title") or form.get("series_name") or form.get("teacher") or filename
     notes = form.get("notes")
     if notes:
@@ -437,9 +499,17 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "message_id": fake_message_id,
         "title": title,
         "filename": filename,
+        "date": today.isoformat(),
+        "hebrew_date": _hebrew_date_str(hdate),
+        "hebrew_year": _hebrew_year_str(hdate),
+        "semester": _semester(hdate),
+        "teacher_id": teacher_id,
+        "subject_area_id": subject_area_id,
+        "sub_discipline_id": sub_discipline_id,
+        "series_id": series_id,
         "audio_downloaded": True,
         "audio_r2_path": r2_path,
-        "needs_human_review": True,
+        "needs_human_review": False,
         "tagged_by": "manual-upload",
         "duration_seconds": state.get("duration"),
         "file_size_bytes": state.get("file_size"),
@@ -453,7 +523,7 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         preview = _format_preview(form, filename)
         await update.callback_query.get_bot().send_message(
             ADMIN_CHAT_ID,
-            f"📥 שיעור חדש הועלה לבדיקה:\n\n{preview}",
+            f"📥 שיעור חדש הועלה:\n\n{preview}",
             parse_mode="Markdown",
         )
     except Exception:
@@ -462,7 +532,7 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data.pop("upload", None)
     context.user_data.pop("awaiting", None)
     await msg.reply_text(
-        "✅ השיעור נשמר בהצלחה! הוא יוצג לאחר אישור המנהל.",
+        "✅ השיעור נשמר בהצלחה!",
         reply_markup=back_to_main(),
     )
 

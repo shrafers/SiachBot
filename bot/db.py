@@ -419,6 +419,42 @@ def mark_reviewed(recording_id: int) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Get-or-create helpers (for upload flow — resolve names to IDs)
+# ---------------------------------------------------------------------------
+
+def get_or_create_teacher(name: str) -> int:
+    sb = get_supabase()
+    resp = sb.table("teachers").select("id").eq("name", name).maybe_single().execute()
+    if resp.data:
+        return resp.data["id"]
+    resp = sb.table("teachers").insert({"name": name}).execute()
+    return resp.data[0]["id"]
+
+
+def get_or_create_sub_discipline(name: str, subject_area_id: int) -> int:
+    sb = get_supabase()
+    resp = sb.table("sub_disciplines").select("id").eq("name", name).maybe_single().execute()
+    if resp.data:
+        return resp.data["id"]
+    resp = sb.table("sub_disciplines").insert({"name": name, "subject_area_id": subject_area_id}).execute()
+    return resp.data[0]["id"]
+
+
+def get_or_create_series(name: str, teacher_id: int | None, subject_area_id: int | None) -> int:
+    sb = get_supabase()
+    resp = sb.table("series").select("id").eq("name", name).maybe_single().execute()
+    if resp.data:
+        return resp.data["id"]
+    data: dict = {"name": name}
+    if teacher_id:
+        data["teacher_id"] = teacher_id
+    if subject_area_id:
+        data["subject_area_id"] = subject_area_id
+    resp = sb.table("series").insert(data).execute()
+    return resp.data[0]["id"]
+
+
+# ---------------------------------------------------------------------------
 # Insert new recording (from upload flow)
 # ---------------------------------------------------------------------------
 
