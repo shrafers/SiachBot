@@ -460,9 +460,13 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         tg_file = await update.callback_query.get_bot().get_file(file_id)
         local_server = os.environ.get("TELEGRAM_LOCAL_SERVER")
         if local_server and tg_file.file_path and tg_file.file_path.startswith("/"):
-            # Local server returns absolute paths — build URL manually to avoid double-slash
+            # Local server returns absolute paths like /var/lib/telegram-bot-api/{token}/music/file.m4a
+            # The download URL uses the path relative to the work directory
             token = os.environ["TELEGRAM_BOT_TOKEN"]
-            url = f"{local_server}/file/bot{token}/{tg_file.file_path.lstrip('/')}"
+            work_dir = os.environ.get("TELEGRAM_WORK_DIR", "/var/lib/telegram-bot-api")
+            fp = tg_file.file_path
+            relative = fp[len(work_dir):].lstrip("/") if fp.startswith(work_dir) else fp.lstrip("/")
+            url = f"{local_server}/file/bot{token}/{relative}"
             async with httpx.AsyncClient(timeout=300) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
