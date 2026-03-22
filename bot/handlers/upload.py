@@ -457,26 +457,23 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     filename = state["filename"]
 
     try:
+        import logging
+        _log = logging.getLogger(__name__)
         tg_file = await update.callback_query.get_bot().get_file(file_id)
+        _log.warning(f"[upload] file_path={tg_file.file_path!r} type={type(tg_file.file_path)}")
         local_server = os.environ.get("TELEGRAM_LOCAL_SERVER")
-        if local_server and tg_file.file_path and tg_file.file_path.startswith("/"):
-            # Local server returns absolute paths like /var/lib/telegram-bot-api/{token}/music/file.m4a
-            # The download URL uses the path relative to the work directory
-            token = os.environ["TELEGRAM_BOT_TOKEN"]
-            work_dir = os.environ.get("TELEGRAM_WORK_DIR", "/var/lib/telegram-bot-api")
-            fp = tg_file.file_path
-            relative = fp[len(work_dir):].lstrip("/") if fp.startswith(work_dir) else fp.lstrip("/")
-            url = f"{local_server}/file/bot{token}/{relative}"
-            import logging
-            logging.getLogger(__name__).info(f"[upload] downloading from local server: {url}")
-            async with httpx.AsyncClient(timeout=300) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                audio_bytes = resp.content
-        else:
-            buf = io.BytesIO()
-            await tg_file.download_to_memory(buf)
-            audio_bytes = buf.getvalue()
+        _log.warning(f"[upload] local_server={local_server!r}")
+        token = os.environ["TELEGRAM_BOT_TOKEN"]
+        work_dir = os.environ.get("TELEGRAM_WORK_DIR", "/var/lib/telegram-bot-api")
+        fp = str(tg_file.file_path or "")
+        relative = fp[len(work_dir):].lstrip("/") if fp.startswith(work_dir) else fp.lstrip("/")
+        url = f"{local_server}/file/bot{token}/{relative}"
+        _log.warning(f"[upload] constructed url={url!r}")
+        async with httpx.AsyncClient(timeout=300) as client:
+            resp = await client.get(url)
+            _log.warning(f"[upload] response status={resp.status_code}")
+            resp.raise_for_status()
+            audio_bytes = resp.content
     except Exception as e:
         await status.edit_text(f"❌ שגיאה בהורדה מטלגרם:\n{e}")
         return
