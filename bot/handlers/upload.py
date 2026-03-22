@@ -463,9 +463,13 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # We need:
         #   http://local-server/file/bot{TOKEN}/{rel_path}
         import re
-        url = re.sub(r'(?<![:/])//+', '/', tg_file.file_path)  # fix double-slash
+        token = os.environ["TELEGRAM_BOT_TOKEN"]
         work_dir = os.environ.get("TELEGRAM_WORK_DIR", "/var/lib/telegram-bot-api")
-        url = url.replace(f"{work_dir}/", "/")  # strip work_dir from URL path
+        url = re.sub(r'(?<![:/])//+', '/', tg_file.file_path)  # fix double-slash
+        # Local server returns absolute path: {work_dir}/{token}/rel/path
+        # After python-telegram-bot builds URL, we get: /file/bot{TOKEN}/{work_dir}/{token}/rel/path
+        # We need: /file/bot{TOKEN}/rel/path  — strip work_dir+token together
+        url = url.replace(f"{work_dir}/{token}/", "/")
         async with httpx.AsyncClient(timeout=300) as client:
             resp = await client.get(url)
             resp.raise_for_status()
