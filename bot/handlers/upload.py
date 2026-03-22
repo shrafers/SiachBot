@@ -457,21 +457,14 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     filename = state["filename"]
 
     try:
-        import logging
-        _log = logging.getLogger(__name__)
         tg_file = await update.callback_query.get_bot().get_file(file_id)
-        _log.warning(f"[upload] file_path={tg_file.file_path!r} type={type(tg_file.file_path)}")
-        local_server = os.environ.get("TELEGRAM_LOCAL_SERVER")
-        _log.warning(f"[upload] local_server={local_server!r}")
-        token = os.environ["TELEGRAM_BOT_TOKEN"]
-        work_dir = os.environ.get("TELEGRAM_WORK_DIR", "/var/lib/telegram-bot-api")
-        fp = str(tg_file.file_path or "")
-        relative = fp[len(work_dir):].lstrip("/") if fp.startswith(work_dir) else fp.lstrip("/")
-        url = f"{local_server}/file/bot{token}/{relative}"
-        _log.warning(f"[upload] constructed url={url!r}")
+        # file_path is already a full URL built by python-telegram-bot,
+        # but has a double-slash bug when the local server returns an absolute path.
+        # Fix: collapse any // that isn't part of ://
+        import re
+        url = re.sub(r'(?<![:/])//+', '/', tg_file.file_path)
         async with httpx.AsyncClient(timeout=300) as client:
             resp = await client.get(url)
-            _log.warning(f"[upload] response status={resp.status_code}")
             resp.raise_for_status()
             audio_bytes = resp.content
     except Exception as e:
