@@ -4,6 +4,8 @@ import io
 import os
 from datetime import datetime, date
 
+import httpx
+
 from dotenv import load_dotenv
 from pyluach import dates as hebdates
 from telegram import Update, Message
@@ -456,9 +458,19 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         tg_file = await update.callback_query.get_bot().get_file(file_id)
-        buf = io.BytesIO()
-        await tg_file.download_to_memory(buf)
-        audio_bytes = buf.getvalue()
+        local_server = os.environ.get("TELEGRAM_LOCAL_SERVER")
+        if local_server and tg_file.file_path and tg_file.file_path.startswith("/"):
+            # Local server returns absolute paths — build URL manually to avoid double-slash
+            token = os.environ["TELEGRAM_BOT_TOKEN"]
+            url = f"{local_server}/file/bot{token}/{tg_file.file_path.lstrip('/')}"
+            async with httpx.AsyncClient(timeout=300) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                audio_bytes = resp.content
+        else:
+            buf = io.BytesIO()
+            await tg_file.download_to_memory(buf)
+            audio_bytes = buf.getvalue()
     except Exception as e:
         await status.edit_text(f"❌ שגיאה בהורדה מטלגרם:\n{e}")
         return
