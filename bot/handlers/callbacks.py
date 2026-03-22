@@ -296,6 +296,10 @@ async def _handle_download(
                 await update.callback_query.message.reply_text(f"שגיאה בהורדה: {e}")
         else:
             await update.callback_query.message.reply_text("מוריד קובץ... ⏳")
+            await context.bot.send_chat_action(
+                chat_id=update.callback_query.message.chat_id,
+                action="upload_document",
+            )
             try:
                 audio_bytes = await r2.get_audio_bytes(rec["audio_r2_path"])
                 await update.callback_query.message.reply_document(
