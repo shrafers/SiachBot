@@ -458,11 +458,14 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         tg_file = await update.callback_query.get_bot().get_file(file_id)
-        # file_path is already a full URL built by python-telegram-bot,
-        # but has a double-slash bug when the local server returns an absolute path.
-        # Fix: collapse any // that isn't part of ://
+        # python-telegram-bot builds file_path as a full URL:
+        #   http://local-server/file/bot{TOKEN}//{work_dir}/{rel_path}
+        # We need:
+        #   http://local-server/file/bot{TOKEN}/{rel_path}
         import re
-        url = re.sub(r'(?<![:/])//+', '/', tg_file.file_path)
+        url = re.sub(r'(?<![:/])//+', '/', tg_file.file_path)  # fix double-slash
+        work_dir = os.environ.get("TELEGRAM_WORK_DIR", "/var/lib/telegram-bot-api")
+        url = url.replace(f"{work_dir}/", "/")  # strip work_dir from URL path
         async with httpx.AsyncClient(timeout=300) as client:
             resp = await client.get(url)
             resp.raise_for_status()
