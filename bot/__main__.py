@@ -57,7 +57,11 @@ async def _text_router(update: Update, context) -> None:
 
 def main() -> None:
     token = os.environ["TELEGRAM_BOT_TOKEN"]
-    app = Application.builder().token(token).build()
+    builder = Application.builder().token(token)
+    local_server = os.environ.get("TELEGRAM_LOCAL_SERVER")
+    if local_server:
+        builder = builder.local_mode(True).base_url(f"{local_server}/bot")
+    app = builder.build()
 
     # Commands
     app.add_handler(CommandHandler("start", start))

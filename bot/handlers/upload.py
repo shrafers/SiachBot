@@ -449,19 +449,6 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.callback_query.answer()
     msg = update.callback_query.message
 
-    # Telegram Bot API cannot download files larger than 20MB
-    file_size = state.get("file_size") or 0
-    if file_size > 20 * 1024 * 1024:
-        await msg.reply_text(
-            f"⚠️ הקובץ גדול מדי ({file_size // (1024*1024)} MB).\n"
-            "טלגרם מאפשר הורדה עד 20MB דרך הבוט.\n"
-            "שלח את הקובץ דרך הקבוצה ישירות.",
-            reply_markup=back_to_main(),
-        )
-        context.user_data.pop("upload", None)
-        context.user_data.pop("awaiting", None)
-        return
-
     status = await msg.reply_text("⬛⬜⬜⬜ מוריד מטלגרם...")
 
     file_id = state["file_id"]
