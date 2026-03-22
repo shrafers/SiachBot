@@ -467,6 +467,8 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             fp = tg_file.file_path
             relative = fp[len(work_dir):].lstrip("/") if fp.startswith(work_dir) else fp.lstrip("/")
             url = f"{local_server}/file/bot{token}/{relative}"
+            import logging
+            logging.getLogger(__name__).info(f"[upload] downloading from local server: {url}")
             async with httpx.AsyncClient(timeout=300) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
