@@ -4,8 +4,6 @@ import io
 import os
 from datetime import datetime, date
 
-import httpx
-
 from dotenv import load_dotenv
 from pyluach import dates as hebdates
 from telegram import Update, Message
@@ -458,22 +456,20 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         tg_file = await update.callback_query.get_bot().get_file(file_id)
-        # python-telegram-bot builds file_path as a full URL:
-        #   http://local-server/file/bot{TOKEN}//{work_dir}/{rel_path}
-        # We need:
-        #   http://local-server/file/bot{TOKEN}/{rel_path}
-        import re
-        token = os.environ["TELEGRAM_BOT_TOKEN"]
-        work_dir = os.environ.get("TELEGRAM_WORK_DIR", "/var/lib/telegram-bot-api")
-        url = re.sub(r'(?<![:/])//+', '/', tg_file.file_path)  # fix double-slash
-        # Local server returns absolute path: {work_dir}/{token}/rel/path
-        # After python-telegram-bot builds URL, we get: /file/bot{TOKEN}/{work_dir}/{token}/rel/path
-        # We need: /file/bot{TOKEN}/rel/path  — strip work_dir+token together
-        url = url.replace(f"{work_dir}/{token}/", "/")
-        async with httpx.AsyncClient(timeout=300) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            audio_bytes = resp.content
+        if os.environ.get("TELEGRAM_LOCAL_SERVER"):
+            # In local mode, file_path is the absolute path on the local server's disk.
+            # The same volume is mounted in this container at the same path, so read directly.
+            token = os.environ["TELEGRAM_BOT_TOKEN"]
+            work_dir = os.environ.get("TELEGRAM_WORK_DIR", "/var/lib/telegram-bot-api")
+            raw = tg_file.file_path
+            marker = f"{token}/"
+            idx = raw.rfind(marker)
+            relative = raw[idx + len(marker):] if idx >= 0 else raw
+            disk_path = f"{work_dir}/{token}/{relative}"
+            with open(disk_path, "rb") as f:
+                audio_bytes = f.read()
+        else:
+            audio_bytes = bytes(await tg_file.download_as_bytearray())
     except Exception as e:
         await status.edit_text(f"❌ שגיאה בהורדה מטלגרם:\n{e}")
         return
