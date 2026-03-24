@@ -1,5 +1,5 @@
 # Stage 1: grab the telegram-bot-api binary and its libraries
-FROM aiogram/telegram-bot-api:latest AS tg-api
+FROM --platform=linux/amd64 aiogram/telegram-bot-api:latest AS tg-api
 
 # Stage 2: main image
 FROM python:3.11-slim
