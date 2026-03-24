@@ -80,6 +80,8 @@ async def handle_audio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     context.user_data["upload"] = {
         "file_id": audio.file_id,
+        "chat_id": msg.chat_id,
+        "message_id": msg.message_id,
         "filename": filename,
         "caption": caption,
         "file_size": getattr(audio, "file_size", None),
@@ -451,25 +453,13 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     status = await msg.reply_text("⬛⬜⬜⬜ מוריד מטלגרם...")
 
-    file_id = state["file_id"]
     filename = state["filename"]
 
     try:
-        tg_file = await update.callback_query.get_bot().get_file(file_id)
-        if os.environ.get("TELEGRAM_LOCAL_SERVER"):
-            # In local mode, file_path is the absolute path on the local server's disk.
-            # The same volume is mounted in this container at the same path, so read directly.
-            token = os.environ["TELEGRAM_BOT_TOKEN"]
-            work_dir = os.environ.get("TELEGRAM_WORK_DIR", "/var/lib/telegram-bot-api")
-            raw = tg_file.file_path
-            marker = f"{token}/"
-            idx = raw.rfind(marker)
-            relative = raw[idx + len(marker):] if idx >= 0 else raw
-            disk_path = f"{work_dir}/{token}/{relative}"
-            with open(disk_path, "rb") as f:
-                audio_bytes = f.read()
-        else:
-            audio_bytes = bytes(await tg_file.download_as_bytearray())
+        from .. import telethon_client
+        audio_bytes = await telethon_client.download_file(
+            state["chat_id"], state["message_id"]
+        )
     except Exception as e:
         await status.edit_text(f"❌ שגיאה בהורדה מטלגרם:\n{e}")
         return
