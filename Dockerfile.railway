@@ -1,31 +1,30 @@
-# Stage 1: grab the telegram-bot-api binary from the official image
+# Stage 1: grab the telegram-bot-api binary and its libraries
 FROM aiogram/telegram-bot-api:latest AS tg-api
 
 # Stage 2: main image
 FROM python:3.11-slim
 
-# Install supervisord (process manager to run both services in one container)
-RUN apt-get update && apt-get install -y --no-install-recommends supervisor && rm -rf /var/lib/apt/lists/*
+# Install supervisord + SSL libraries needed by telegram-bot-api binary
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    supervisor \
+    libssl3 \
+    libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy telegram-bot-api binary from stage 1
 COPY --from=tg-api /usr/local/bin/telegram-bot-api /usr/local/bin/telegram-bot-api
 
-# Create directories the bot API server needs
-RUN mkdir -p /var/lib/telegram-bot-api /tmp/telegram-bot-api
-
-# Add a system user/group that the bot API server expects
-RUN groupadd -r telegram-bot-api && useradd -r -g telegram-bot-api telegram-bot-api
-RUN chown telegram-bot-api:telegram-bot-api /var/lib/telegram-bot-api /tmp/telegram-bot-api
+# Create directories and user the bot API server needs
+RUN groupadd -r telegram-bot-api && useradd -r -g telegram-bot-api telegram-bot-api \
+    && mkdir -p /var/lib/telegram-bot-api /tmp/telegram-bot-api \
+    && chown telegram-bot-api:telegram-bot-api /var/lib/telegram-bot-api /tmp/telegram-bot-api
 
 # Install Python dependencies
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy bot source
+# Copy bot source and supervisord config
 COPY . .
-
-# Copy supervisord config
-COPY supervisord.conf /etc/supervisor/conf.d/siachbot.conf
 
 CMD ["supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
