@@ -29,7 +29,10 @@
       "Bash(railway variables:*)",
       "Bash(railway ps:*)",
       "Bash(railway --help)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(TOKEN=\"2116512480:AAGXQI3ngbV_wSQl52cJHjySUs2poVp4ei4\")",
+      "Bash(railway ssh:*)",
+      "Bash(git push:*)"
     ]
   }
 }
