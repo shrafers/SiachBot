@@ -6,8 +6,7 @@ from telegram.ext import ContextTypes
 from .. import db
 from ..keyboards import (
     teacher_list_keyboard,
-    teacher_years_keyboard,
-    teacher_year_series_keyboard,
+    teacher_series_keyboard,
     series_list_keyboard,
     chavurot_keyboard,
     hebrew_years_keyboard,
@@ -46,13 +45,14 @@ async def _show_teacher_list(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 
 # ---------------------------------------------------------------------------
-# Teacher → Hebrew years
+# Teacher → series list (chronological) + שיעורים בודדים
 # ---------------------------------------------------------------------------
 
-async def show_teacher_years(
+async def show_teacher_series(
     update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int
 ) -> None:
-    years = db.get_teacher_hebrew_years(teacher_id)
+    series_list = db.get_series_by_teacher_chrono(teacher_id)
+    standalone_count = db.count_standalone_by_teacher(teacher_id)
     msg = update.message or update.callback_query.message
 
     teacher_name = f"מרצה {teacher_id}"
@@ -62,47 +62,42 @@ async def show_teacher_years(
             teacher_name = t["name"]
             break
 
-    if not years:
-        await show_teacher_recordings(update, context, teacher_id=teacher_id, page=0)
+    if not series_list and standalone_count == 0:
+        await msg.reply_text("אין שיעורים למרצה זה.", reply_markup=back_to_main())
         return
 
     await msg.reply_text(
-        f"👤 *{teacher_name}* — בחר שנה:",
+        f"👤 *{teacher_name}* — בחר סדרה:",
         parse_mode="Markdown",
-        reply_markup=teacher_years_keyboard(years, teacher_id),
+        reply_markup=teacher_series_keyboard(series_list, teacher_id, standalone_count),
     )
 
 
 # ---------------------------------------------------------------------------
-# Teacher + year → series
+# Teacher standalone recordings (no series)
 # ---------------------------------------------------------------------------
 
-async def show_teacher_year_series(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int, hebrew_year: str
+async def show_teacher_standalone_recordings(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int, page: int
 ) -> None:
-    series_list = db.get_series_by_teacher_and_year(teacher_id, hebrew_year)
-    msg = update.message or update.callback_query.message
+    results = db.get_standalone_recordings_by_teacher(teacher_id, page)
+    total = db.count_standalone_by_teacher(teacher_id)
+    tp = total_pages(total, db.PAGE_SIZE)
 
-    teacher_name = f"מרצה {teacher_id}"
-    all_teachers = db.get_teacher_list()
-    for t in all_teachers:
-        if t["id"] == teacher_id:
-            teacher_name = t["name"]
-            break
-
-    if not series_list:
-        await msg.reply_text("אין סדרות בשנה זו.", reply_markup=back_to_main())
-        return
-
-    await msg.reply_text(
-        f"👤 *{teacher_name}* — 📅 *{hebrew_year}*:",
-        parse_mode="Markdown",
-        reply_markup=teacher_year_series_keyboard(series_list, teacher_id, hebrew_year),
+    teacher_name = results[0]["teacher_name"] if results else f"מרצה {teacher_id}"
+    await send_results_page(
+        update, context,
+        results=results,
+        header=f"👤 *{teacher_name}* — 📌 שיעורים בודדים — {total} שיעורים, עמוד {page+1}/{tp}",
+        context_action="teacher_standalone",
+        context_id=teacher_id,
+        page=page,
+        total_pages=tp,
     )
 
 
 # ---------------------------------------------------------------------------
-# All recordings for a teacher (used by "כל השיעורים" button)
+# All recordings for a teacher (used by "עוד כמו זה" fallback)
 # ---------------------------------------------------------------------------
 
 async def show_teacher_recordings(
@@ -117,7 +112,7 @@ async def show_teacher_recordings(
         update, context,
         results=results,
         header=f"👤 *{teacher_name}* — {total} שיעורים, עמוד {page+1}/{tp}",
-        context_action="teacher_recs",
+        context_action="teacher_recent",
         context_id=teacher_id,
         page=page,
         total_pages=tp,

@@ -116,35 +116,38 @@ def get_series_by_teacher(teacher_id: int) -> list[dict]:
     return resp.data or []
 
 
-def get_teacher_hebrew_years(teacher_id: int) -> list[dict]:
-    """Hebrew years this teacher has recordings in, sorted by most recent date first."""
+def get_series_by_teacher_chrono(teacher_id: int) -> list[dict]:
+    """All series for a teacher ordered by most recent lesson date DESC."""
     sb = get_supabase()
-    resp = sb.rpc("teacher_hebrew_years", {"p_teacher_id": teacher_id}).execute()
+    resp = sb.rpc("series_by_teacher_chrono", {"p_teacher_id": teacher_id}).execute()
     return resp.data or []
 
 
-def get_series_by_teacher_and_year(teacher_id: int, hebrew_year: str) -> list[dict]:
-    """Series taught by a teacher that have recordings in a given Hebrew year."""
+def get_standalone_recordings_by_teacher(teacher_id: int, page: int = 0) -> list[dict]:
+    """Recordings by a teacher with no series (series_id IS NULL)."""
     sb = get_supabase()
     resp = (
         sb.table("recordings")
-        .select("series_id")
+        .select(_recording_select())
         .eq("teacher_id", teacher_id)
-        .eq("hebrew_year", hebrew_year)
-        .not_.is_("series_id", "null")
+        .is_("series_id", "null")
+        .order("date", desc=True)
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
         .execute()
     )
-    series_ids = list({r["series_id"] for r in (resp.data or [])})
-    if not series_ids:
-        return []
-    resp2 = (
-        sb.table("series")
-        .select("id, name, total_lessons")
-        .in_("id", series_ids)
-        .order("name")
+    return _flatten_joins(resp.data or [])
+
+
+def count_standalone_by_teacher(teacher_id: int) -> int:
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select("id", count="exact", head=True)
+        .eq("teacher_id", teacher_id)
+        .is_("series_id", "null")
         .execute()
     )
-    return resp2.data or []
+    return resp.count or 0
 
 
 def get_recent_by_teacher(teacher_id: int, limit: int = 10) -> list[dict]:

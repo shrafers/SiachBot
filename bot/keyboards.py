@@ -35,37 +35,22 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def teacher_years_keyboard(years: list[dict], teacher_id: int) -> InlineKeyboardMarkup:
-    """Hebrew year buttons for a specific teacher."""
-    rows = []
-    rows.append([InlineKeyboardButton(
-        "🕐 כל השיעורים",
-        callback_data=encode_cb("teacher_recent", id=teacher_id),
-    )])
-    for y in years:
-        label = f"📅 {y['hebrew_year']} ({y['count']})"
-        rows.append([InlineKeyboardButton(
-            label,
-            callback_data=encode_cb("teacher_year", tid=teacher_id, y=y["hebrew_year"]),
-        )])
-    rows.append([InlineKeyboardButton(
-        "🔙 חזרה", callback_data=encode_cb("browse_teachers", p=0))])
-    return InlineKeyboardMarkup(rows)
-
-
-def teacher_year_series_keyboard(series_list: list[dict], teacher_id: int, hebrew_year: str) -> InlineKeyboardMarkup:
-    """Series buttons for a specific teacher + year."""
+def teacher_series_keyboard(series_list: list[dict], teacher_id: int, standalone_count: int = 0) -> InlineKeyboardMarkup:
+    """Series list for a teacher, with optional שיעורים בודדים entry."""
     rows = []
     for s in series_list:
         label = s["name"]
-        if s.get("total_lessons"):
-            label += f" ({s['total_lessons']} שיעורים)"
         rows.append([InlineKeyboardButton(
             label,
             callback_data=encode_cb("series_recs", id=s["id"], p=0),
         )])
+    if standalone_count > 0:
+        rows.append([InlineKeyboardButton(
+            f"📌 שיעורים בודדים ({standalone_count})",
+            callback_data=encode_cb("teacher_standalone", tid=teacher_id, p=0),
+        )])
     rows.append([InlineKeyboardButton(
-        "🔙 חזרה", callback_data=encode_cb("teacher_recs", id=teacher_id, p=0))])
+        "🔙 חזרה", callback_data=encode_cb("browse_teachers", p=0))])
     return InlineKeyboardMarkup(rows)
 
 

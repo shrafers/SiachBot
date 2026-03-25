@@ -45,16 +45,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await browse.show_teacher_list(update, context, page=data.get("p", 0))
 
     elif action == "teacher_recs":
-        # Tap on a teacher name → show Hebrew years for that teacher
-        await browse.show_teacher_years(update, context, teacher_id=data["id"])
+        # Tap on a teacher name → show their series list
+        await browse.show_teacher_series(update, context, teacher_id=data["id"])
 
     elif action == "teacher_recent":
-        # "כל השיעורים" button → all recordings by teacher
+        # All recordings by teacher (used by "עוד כמו זה" fallback)
         await browse.show_teacher_recordings(update, context, teacher_id=data["id"], page=data.get("p", 0))
 
-    elif action == "teacher_year":
-        # Tap on a year → series for that teacher in that year
-        await browse.show_teacher_year_series(update, context, teacher_id=data["tid"], hebrew_year=data["y"])
+    elif action == "teacher_standalone":
+        # Standalone (no-series) recordings for a teacher
+        await browse.show_teacher_standalone_recordings(update, context, teacher_id=data["tid"], page=data.get("p", 0))
 
     # ------------------------------------------------------------------
     # Browse — series
@@ -304,7 +304,7 @@ async def _handle_like(
         total = db.count_by_teacher(rec["teacher_id"])
         teacher = rec.get("teacher_name") or ""
         header = f"👤 עוד מ: *{teacher}*"
-        ctx_action = "teacher_recs"
+        ctx_action = "teacher_recent"
         ctx_id = rec["teacher_id"]
     else:
         await update.callback_query.message.reply_text("לא נמצאו שיעורים דומים.")

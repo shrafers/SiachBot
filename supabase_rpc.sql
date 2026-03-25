@@ -11,15 +11,16 @@ LANGUAGE sql STABLE AS $$
   ORDER BY count DESC, t.name;
 $$;
 
--- Hebrew years for a specific teacher (Teacher → Years → Series flow)
-CREATE OR REPLACE FUNCTION teacher_hebrew_years(p_teacher_id INT)
-RETURNS TABLE(hebrew_year TEXT, count BIGINT)
+-- Series for a specific teacher ordered by most recent lesson date
+CREATE OR REPLACE FUNCTION series_by_teacher_chrono(p_teacher_id INT)
+RETURNS TABLE(id INT, name TEXT, total_lessons INT, last_date DATE)
 LANGUAGE sql STABLE AS $$
-  SELECT hebrew_year, COUNT(*) AS count
-  FROM recordings
-  WHERE teacher_id = p_teacher_id AND hebrew_year IS NOT NULL
-  GROUP BY hebrew_year
-  ORDER BY MAX(date) DESC NULLS LAST;
+  SELECT s.id, s.name, s.total_lessons, MAX(r.date) AS last_date
+  FROM series s
+  LEFT JOIN recordings r ON r.series_id = s.id
+  WHERE s.teacher_id = p_teacher_id
+  GROUP BY s.id, s.name, s.total_lessons
+  ORDER BY last_date DESC NULLS LAST;
 $$;
 
 -- All series ordered by most recent lesson date (all-series chronological browse)
