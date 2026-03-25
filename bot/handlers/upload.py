@@ -15,8 +15,6 @@ from ..keyboards import (
     back_to_main,
     upload_teacher_keyboard,
     upload_teacher_other_keyboard,
-    upload_subject_keyboard,
-    upload_subdiscipline_keyboard,
     upload_series_keyboard,
     upload_skip_keyboard,
 )
@@ -37,8 +35,6 @@ TEACHER_THRESHOLD = 10
 STEPS = [
     # key             label                                  mandatory  input_mode
     ("teacher",        "בחר מוסר שיעור:",                    True,      "buttons"),
-    ("subject_area",   "בחר תחום:",                          True,      "buttons"),
-    ("sub_discipline", "בחר תת-תחום:",                       True,      "buttons"),
     ("title",          "כותרת השיעור:",                       True,      "text"),
     ("series",         "בחר סדרה:",                          False,     "buttons"),
     ("lesson_number",  "מספר שיעור בסדרה:",                  False,     "text"),
@@ -117,10 +113,6 @@ async def _ask_step(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
     if input_mode == "buttons":
         if key == "teacher":
             await _ask_teacher(msg, context)
-        elif key == "subject_area":
-            await _ask_subject(msg, context)
-        elif key == "sub_discipline":
-            await _ask_subdiscipline(msg, context)
         elif key == "series":
             await _ask_series(msg, context)
     else:
@@ -143,26 +135,6 @@ async def _ask_teacher(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
         "👤 *בחר מוסר שיעור:*",
         parse_mode="Markdown",
         reply_markup=upload_teacher_keyboard(main, has_others=bool(others)),
-    )
-
-
-async def _ask_subject(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
-    areas = db.get_subject_areas()
-    await msg.reply_text(
-        "📂 *בחר תחום:*",
-        parse_mode="Markdown",
-        reply_markup=upload_subject_keyboard(areas),
-    )
-
-
-async def _ask_subdiscipline(msg, context: ContextTypes.DEFAULT_TYPE) -> None:
-    state = context.user_data["upload"]
-    subject_area_id = state["form"].get("subject_area_id")
-    subs = db.get_sub_disciplines(subject_area_id) if subject_area_id else []
-    await msg.reply_text(
-        "📋 *בחר תת-תחום:*",
-        parse_mode="Markdown",
-        reply_markup=upload_subdiscipline_keyboard(subs, subject_area_id or 0),
     )
 
 
@@ -224,71 +196,6 @@ async def handle_new_teacher_text(update: Update, context: ContextTypes.DEFAULT_
     name = update.message.text.strip()
     state["form"]["teacher"] = name
     state["form"]["teacher_id"] = None
-    state["step"] += 1
-    context.user_data["awaiting"] = "upload_form"
-    await _ask_step(update.message, context)
-
-
-# ---------------------------------------------------------------------------
-# Callback handlers — subject area
-# ---------------------------------------------------------------------------
-
-async def handle_subject_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, subject_area_id: int) -> None:
-    areas = db.get_subject_areas()
-    area = next((a for a in areas if a["id"] == subject_area_id), None)
-    if not area:
-        await update.callback_query.answer("תחום לא נמצא.")
-        return
-    state = context.user_data["upload"]
-    state["form"]["subject_area"] = area["name"]
-    state["form"]["subject_area_id"] = subject_area_id
-    state["step"] += 1
-    await update.callback_query.answer()
-    await _ask_step(update.callback_query.message, context)
-
-
-async def handle_subject_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    state = context.user_data.get("upload")
-    if state:
-        state["step"] = max(0, state["step"] - 1)
-        state["form"].pop("sub_discipline", None)
-        state["form"].pop("sub_discipline_id", None)
-    await update.callback_query.answer()
-    await _ask_subject(update.callback_query.message, context)
-
-
-# ---------------------------------------------------------------------------
-# Callback handlers — sub-discipline
-# ---------------------------------------------------------------------------
-
-async def handle_subdiscipline_selected(update: Update, context: ContextTypes.DEFAULT_TYPE, sub_id: int) -> None:
-    state = context.user_data["upload"]
-    subject_area_id = state["form"].get("subject_area_id")
-    subs = db.get_sub_disciplines(subject_area_id) if subject_area_id else []
-    sub = next((s for s in subs if s["id"] == sub_id), None)
-    if not sub:
-        await update.callback_query.answer("תת-תחום לא נמצא.")
-        return
-    state["form"]["sub_discipline"] = sub["name"]
-    state["form"]["sub_discipline_id"] = sub_id
-    state["step"] += 1
-    await update.callback_query.answer()
-    await _ask_step(update.callback_query.message, context)
-
-
-async def handle_subdiscipline_new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.callback_query.answer()
-    context.user_data["awaiting"] = "upload_new_subdiscipline"
-    await update.callback_query.message.reply_text("✏️ הקלד שם התת-תחום החדש:")
-
-
-async def handle_new_subdiscipline_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    state = context.user_data.get("upload")
-    if not state:
-        return
-    name = update.message.text.strip()
-    state["form"]["sub_discipline"] = name
-    state["form"]["sub_discipline_id"] = None
     state["step"] += 1
     context.user_data["awaiting"] = "upload_form"
     await _ask_step(update.message, context)
@@ -486,15 +393,9 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not teacher_id and form.get("teacher"):
         teacher_id = db.get_or_create_teacher(form["teacher"])
 
-    subject_area_id = form.get("subject_area_id")
-
-    sub_discipline_id = form.get("sub_discipline_id")
-    if not sub_discipline_id and form.get("sub_discipline") and subject_area_id:
-        sub_discipline_id = db.get_or_create_sub_discipline(form["sub_discipline"], subject_area_id)
-
     series_id = form.get("series_id")
     if not series_id and form.get("series_name"):
-        series_id = db.get_or_create_series(form["series_name"], teacher_id, subject_area_id)
+        series_id = db.get_or_create_series(form["series_name"], teacher_id)
 
     # ------------------------------------------------------------------
     # Hebrew date fields (computed from today's date)
@@ -518,8 +419,6 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "hebrew_year": _hebrew_year_str(hdate),
         "semester": _semester(hdate),
         "teacher_id": teacher_id,
-        "subject_area_id": subject_area_id,
-        "sub_discipline_id": sub_discipline_id,
         "series_id": series_id,
         "audio_downloaded": True,
         "audio_r2_path": r2_path,
@@ -576,10 +475,6 @@ def _format_preview(form: dict, filename: str = "") -> str:
     lines = []
     if form.get("teacher"):
         lines.append(f"👤 {form['teacher']}")
-    if form.get("subject_area"):
-        lines.append(f"📂 {form['subject_area']}")
-    if form.get("sub_discipline"):
-        lines.append(f"📋 {form['sub_discipline']}")
     if form.get("title"):
         lines.append(f"📖 {form['title']}")
     series = form.get("series_name")

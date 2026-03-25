@@ -45,24 +45,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await browse.show_teacher_list(update, context, page=data.get("p", 0))
 
     elif action == "teacher_recs":
-        # Tap on a teacher name → show subject areas for that teacher
-        await browse.show_teacher_subjects(update, context, teacher_id=data["id"])
+        # Tap on a teacher name → show Hebrew years for that teacher
+        await browse.show_teacher_years(update, context, teacher_id=data["id"])
 
     elif action == "teacher_recent":
-        # "Recent" button on teacher subject page → all recent by teacher
+        # "כל השיעורים" button → all recordings by teacher
         await browse.show_teacher_recordings(update, context, teacher_id=data["id"], page=data.get("p", 0))
 
-    elif action == "teacher_subj":
-        # Tap on a subject area within a teacher → sub-disciplines
-        await browse.show_teacher_sub_disciplines(update, context, teacher_id=data["tid"], subject_area_id=data["sid"])
-
-    elif action == "teacher_subj_back":
-        # Back from sub-disciplines → teacher subject areas
-        await browse.show_teacher_subjects(update, context, teacher_id=data["id"])
-
-    elif action == "teacher_subj_recent":
-        # "Recent" on teacher+subject sub-discipline page
-        await browse.show_teacher_subject_recent(update, context, teacher_id=data["tid"], subject_area_id=data["sid"])
+    elif action == "teacher_year":
+        # Tap on a year → series for that teacher in that year
+        await browse.show_teacher_year_series(update, context, teacher_id=data["tid"], hebrew_year=data["y"])
 
     # ------------------------------------------------------------------
     # Browse — series
@@ -72,26 +64,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif action == "series_recs":
         await browse.show_series_recordings(update, context, series_id=data["id"], page=data.get("p", 0))
-
-    # ------------------------------------------------------------------
-    # Browse — subject areas / sub-disciplines
-    # ------------------------------------------------------------------
-    elif action == "browse_subj":
-        await browse.show_sub_disciplines(update, context, subject_area_id=data["id"])
-
-    elif action == "browse_subj_back":
-        await browse.show_subject_areas(update, context)
-
-    elif action == "subj_recent":
-        await browse.show_subject_area_recent(update, context, subject_area_id=data["id"])
-
-    elif action == "teacher_sub_recs":
-        await browse.show_teacher_sub_discipline_recordings(
-            update, context, teacher_id=data["tid"], sub_discipline_id=data["id"], page=data.get("p", 0)
-        )
-
-    elif action == "browse_sub":
-        await browse.show_sub_discipline_recordings(update, context, sub_discipline_id=data["id"], page=data.get("p", 0))
 
     # ------------------------------------------------------------------
     # Browse — chavurot
@@ -156,12 +128,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await _handle_like(update, context, recording_id=data["id"])
 
     # ------------------------------------------------------------------
-    # Browse — subject areas (main menu entry point)
-    # ------------------------------------------------------------------
-    elif action == "browse_subjects":
-        await browse.show_subject_areas(update, context)
-
-    # ------------------------------------------------------------------
     # Upload flow — confirm / edit / cancel
     # ------------------------------------------------------------------
     elif action == "up_confirm":
@@ -187,21 +153,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif action == "up_tea_new":
         await upload_handlers.handle_teacher_new(update, context)
-
-    # ------------------------------------------------------------------
-    # Upload flow — subject area + sub-discipline selection
-    # ------------------------------------------------------------------
-    elif action == "up_subj":
-        await upload_handlers.handle_subject_selected(update, context, subject_area_id=data["id"])
-
-    elif action == "up_subj_back":
-        await upload_handlers.handle_subject_back(update, context)
-
-    elif action == "up_sub":
-        await upload_handlers.handle_subdiscipline_selected(update, context, sub_id=data["id"])
-
-    elif action == "up_sub_new":
-        await upload_handlers.handle_subdiscipline_new(update, context)
 
     # ------------------------------------------------------------------
     # Upload flow — series selection
@@ -242,9 +193,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 "duration": rec.get("duration_seconds"),
                 "form": {
                     "teacher": rec.get("teacher_name"),
-                    "subject_area": rec.get("sub_discipline_name"),
-                    "sub_discipline": rec.get("sub_discipline_name"),
+                    "teacher_id": rec.get("teacher_id"),
                     "series_name": rec.get("series_name"),
+                    "series_id": rec.get("series_id"),
                     "lesson_number": rec.get("lesson_number"),
                     "notes": None,
                 },

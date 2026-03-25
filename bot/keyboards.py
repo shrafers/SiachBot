@@ -22,86 +22,50 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                "📂 לפי תחום", callback_data=encode_cb("browse_subjects")),
-            InlineKeyboardButton(
                 "📖 סדרות", callback_data=encode_cb("browse_series", p=0)),
-        ],
-        [
             InlineKeyboardButton(
                 "📅 לפי זמן", callback_data=encode_cb("browse_zmanim")),
-            InlineKeyboardButton(
-                "🕐 אחרונים", callback_data=encode_cb("recent")),
         ],
         [
+            InlineKeyboardButton(
+                "🕐 אחרונים", callback_data=encode_cb("recent")),
             InlineKeyboardButton(
                 "⬆️ העלאת שיעור", callback_data=encode_cb("upload_prompt")),
         ],
     ])
 
 
-def browse_subject_keyboard(areas: list[dict], back_action: str = "main_menu", back_kwargs: dict | None = None) -> InlineKeyboardMarkup:
-    """Subject area list. back_action/back_kwargs control the back button destination."""
-    rows = []
-    for area in areas:
-        count = area.get("count", "")
-        label = f"{area['name']} ({count})" if count else area["name"]
-        rows.append([InlineKeyboardButton(
-            label,
-            callback_data=encode_cb("browse_subj", id=area["id"]),
-        )])
-    back_cb = encode_cb(back_action, **(back_kwargs or {}))
-    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=back_cb)])
-    return InlineKeyboardMarkup(rows)
-
-
-def teacher_subject_keyboard(areas: list[dict], teacher_id: int) -> InlineKeyboardMarkup:
-    """Subject areas for a specific teacher, with a Recent button and back."""
+def teacher_years_keyboard(years: list[dict], teacher_id: int) -> InlineKeyboardMarkup:
+    """Hebrew year buttons for a specific teacher."""
     rows = []
     rows.append([InlineKeyboardButton(
-        "🕐 אחרונים",
+        "🕐 כל השיעורים",
         callback_data=encode_cb("teacher_recent", id=teacher_id),
     )])
-    for area in areas:
-        count = area.get("count", "")
-        label = f"{area['name']} ({count})" if count else area["name"]
+    for y in years:
+        label = f"📅 {y['hebrew_year']} ({y['count']})"
         rows.append([InlineKeyboardButton(
             label,
-            callback_data=encode_cb(
-                "teacher_subj", tid=teacher_id, sid=area["id"]),
+            callback_data=encode_cb("teacher_year", tid=teacher_id, y=y["hebrew_year"]),
         )])
     rows.append([InlineKeyboardButton(
         "🔙 חזרה", callback_data=encode_cb("browse_teachers", p=0))])
     return InlineKeyboardMarkup(rows)
 
 
-def sub_discipline_keyboard(subs: list[dict], subject_area_id: int, teacher_id: int | None = None) -> InlineKeyboardMarkup:
-    """Sub-disciplines list. If teacher_id provided, back goes to teacher's subjects."""
+def teacher_year_series_keyboard(series_list: list[dict], teacher_id: int, hebrew_year: str) -> InlineKeyboardMarkup:
+    """Series buttons for a specific teacher + year."""
     rows = []
-    # Recent button for this subject area (or teacher+subject)
-    if teacher_id:
+    for s in series_list:
+        label = s["name"]
+        if s.get("total_lessons"):
+            label += f" ({s['total_lessons']} שיעורים)"
         rows.append([InlineKeyboardButton(
-            "🕐 אחרונים",
-            callback_data=encode_cb(
-                "teacher_subj_recent", tid=teacher_id, sid=subject_area_id),
+            label,
+            callback_data=encode_cb("series_recs", id=s["id"], p=0),
         )])
-    else:
-        rows.append([InlineKeyboardButton(
-            "🕐 אחרונים",
-            callback_data=encode_cb("subj_recent", id=subject_area_id),
-        )])
-    for sub in subs:
-        count = sub.get("count", "")
-        label = f"{sub['name']} ({count})" if count else sub["name"]
-        if teacher_id:
-            cb = encode_cb("teacher_sub_recs", tid=teacher_id, id=sub["id"])
-        else:
-            cb = encode_cb("browse_sub", id=sub["id"])
-        rows.append([InlineKeyboardButton(label, callback_data=cb)])
-    if teacher_id:
-        back_cb = encode_cb("teacher_subj_back", id=teacher_id)
-    else:
-        back_cb = encode_cb("browse_subj_back", id=subject_area_id)
-    rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=back_cb)])
+    rows.append([InlineKeyboardButton(
+        "🔙 חזרה", callback_data=encode_cb("teacher_recs", id=teacher_id, p=0))])
     return InlineKeyboardMarkup(rows)
 
 
@@ -320,19 +284,6 @@ def upload_teacher_other_keyboard(other_teachers: list[dict]) -> InlineKeyboardM
     return InlineKeyboardMarkup(rows)
 
 
-def upload_subject_keyboard(areas: list[dict]) -> InlineKeyboardMarkup:
-    """Subject area selection during upload."""
-    rows = []
-    for area in areas:
-        rows.append([InlineKeyboardButton(
-            area["name"],
-            callback_data=encode_cb("up_subj", id=area["id"]),
-        )])
-    rows.append([InlineKeyboardButton(
-        "❌ בטל", callback_data=encode_cb("up_cancel"))])
-    return InlineKeyboardMarkup(rows)
-
-
 def upload_skip_keyboard() -> InlineKeyboardMarkup:
     """Single skip button for optional text steps."""
     return InlineKeyboardMarkup([[
@@ -358,21 +309,6 @@ def upload_series_keyboard(series: list[dict]) -> InlineKeyboardMarkup:
     ])
     rows.append([InlineKeyboardButton(
         "❌ בטל", callback_data=encode_cb("up_cancel"))])
-    return InlineKeyboardMarkup(rows)
-
-
-def upload_subdiscipline_keyboard(subs: list[dict], subject_area_id: int) -> InlineKeyboardMarkup:
-    """Sub-discipline selection during upload, with 'new' option."""
-    rows = []
-    for sub in subs:
-        rows.append([InlineKeyboardButton(
-            sub["name"],
-            callback_data=encode_cb("up_sub", id=sub["id"]),
-        )])
-    rows.append([InlineKeyboardButton("➕ תת-תחום חדש",
-                callback_data=encode_cb("up_sub_new"))])
-    rows.append([InlineKeyboardButton(
-        "🔙 חזרה", callback_data=encode_cb("up_subj_back"))])
     return InlineKeyboardMarkup(rows)
 
 

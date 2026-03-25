@@ -38,7 +38,7 @@ def search_recordings(query: str, page: int = 0, filter_type: str = "all") -> li
         .select(
             "id, message_id, title, date, hebrew_date, is_oneoff, "
             "audio_downloaded, audio_r2_path, telegram_link, lesson_number, duration_seconds, "
-            "teachers(name), series(name), sub_disciplines(name), chavurot(name)"
+            "teachers(name), series(name), chavurot(name)"
         )
         .text_search("title", query, config="simple")
         .order("date", desc=True)
@@ -82,34 +82,19 @@ def get_teacher_list() -> list[dict]:
 
 
 def get_series_list(page: int = 0) -> list[dict]:
+    """All series ordered by most recent lesson date (chronological)."""
     sb = get_supabase()
-    resp = (
-        sb.table("series")
-        .select("id, name, total_lessons, teachers(name)")
-        .order("name")
-        .range(page * LIST_SIZE, page * LIST_SIZE + LIST_SIZE - 1)
-        .execute()
-    )
-    return _flatten_joins(resp.data or [])
+    resp = sb.rpc("series_chronological", {
+        "p_offset": page * LIST_SIZE,
+        "p_limit": LIST_SIZE,
+    }).execute()
+    return resp.data or []
 
 
 def count_series() -> int:
     sb = get_supabase()
     resp = sb.table("series").select("id", count="exact", head=True).execute()
     return resp.count or 0
-
-
-def get_subject_areas() -> list[dict]:
-    sb = get_supabase()
-    resp = sb.rpc("subject_areas_with_count").execute()
-    return resp.data or []
-
-
-def get_sub_disciplines(subject_area_id: int) -> list[dict]:
-    """Sub-disciplines for a subject area with count >= 5 first, then 'אחר'."""
-    sb = get_supabase()
-    resp = sb.rpc("sub_disciplines_with_count", {"p_subject_area_id": subject_area_id}).execute()
-    return resp.data or []
 
 
 def get_chavurot() -> list[dict]:
@@ -131,34 +116,35 @@ def get_series_by_teacher(teacher_id: int) -> list[dict]:
     return resp.data or []
 
 
-def get_subject_areas_by_teacher(teacher_id: int) -> list[dict]:
-    """Subject areas that have recordings for a specific teacher, with counts."""
+def get_teacher_hebrew_years(teacher_id: int) -> list[dict]:
+    """Hebrew years this teacher has recordings in, sorted by most recent date first."""
     sb = get_supabase()
-    resp = sb.rpc("subject_areas_by_teacher", {"p_teacher_id": teacher_id}).execute()
+    resp = sb.rpc("teacher_hebrew_years", {"p_teacher_id": teacher_id}).execute()
     return resp.data or []
 
 
-def get_sub_disciplines_by_teacher_and_subject(teacher_id: int, subject_area_id: int) -> list[dict]:
-    """Sub-disciplines with recordings for a specific teacher + subject area."""
-    sb = get_supabase()
-    resp = sb.rpc("sub_disciplines_by_teacher_and_subject", {
-        "p_teacher_id": teacher_id,
-        "p_subject_area_id": subject_area_id,
-    }).execute()
-    return resp.data or []
-
-
-def get_recent_by_subject_area(subject_area_id: int, limit: int = 10) -> list[dict]:
+def get_series_by_teacher_and_year(teacher_id: int, hebrew_year: str) -> list[dict]:
+    """Series taught by a teacher that have recordings in a given Hebrew year."""
     sb = get_supabase()
     resp = (
         sb.table("recordings")
-        .select(_recording_select())
-        .eq("subject_area_id", subject_area_id)
-        .order("date", desc=True)
-        .limit(limit)
+        .select("series_id")
+        .eq("teacher_id", teacher_id)
+        .eq("hebrew_year", hebrew_year)
+        .not_.is_("series_id", "null")
         .execute()
     )
-    return _flatten_joins(resp.data or [])
+    series_ids = list({r["series_id"] for r in (resp.data or [])})
+    if not series_ids:
+        return []
+    resp2 = (
+        sb.table("series")
+        .select("id, name, total_lessons")
+        .in_("id", series_ids)
+        .order("name")
+        .execute()
+    )
+    return resp2.data or []
 
 
 def get_recent_by_teacher(teacher_id: int, limit: int = 10) -> list[dict]:
@@ -182,7 +168,7 @@ def _recording_select():
     return (
         "id, message_id, title, date, hebrew_date, is_oneoff, "
         "audio_downloaded, audio_r2_path, telegram_link, lesson_number, duration_seconds, "
-        "teachers(name), series(name), sub_disciplines(name), chavurot(name)"
+        "teachers(name), series(name), chavurot(name)"
     )
 
 
@@ -221,51 +207,6 @@ def get_recordings_by_series(series_id: int, page: int = 0) -> list[dict]:
 def count_by_series(series_id: int) -> int:
     sb = get_supabase()
     resp = sb.table("recordings").select("id", count="exact", head=True).eq("series_id", series_id).execute()
-    return resp.count or 0
-
-
-def get_recordings_by_sub_discipline(sub_discipline_id: int, page: int = 0) -> list[dict]:
-    sb = get_supabase()
-    resp = (
-        sb.table("recordings")
-        .select(_recording_select())
-        .eq("sub_discipline_id", sub_discipline_id)
-        .order("date", desc=True)
-        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
-        .execute()
-    )
-    return _flatten_joins(resp.data or [])
-
-
-def count_by_sub_discipline(sub_discipline_id: int) -> int:
-    sb = get_supabase()
-    resp = sb.table("recordings").select("id", count="exact", head=True).eq("sub_discipline_id", sub_discipline_id).execute()
-    return resp.count or 0
-
-
-def get_recordings_by_teacher_and_sub_discipline(teacher_id: int, sub_discipline_id: int, page: int = 0) -> list[dict]:
-    sb = get_supabase()
-    resp = (
-        sb.table("recordings")
-        .select(_recording_select())
-        .eq("teacher_id", teacher_id)
-        .eq("sub_discipline_id", sub_discipline_id)
-        .order("date", desc=True)
-        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
-        .execute()
-    )
-    return _flatten_joins(resp.data or [])
-
-
-def count_by_teacher_and_sub_discipline(teacher_id: int, sub_discipline_id: int) -> int:
-    sb = get_supabase()
-    resp = (
-        sb.table("recordings")
-        .select("id", count="exact", head=True)
-        .eq("teacher_id", teacher_id)
-        .eq("sub_discipline_id", sub_discipline_id)
-        .execute()
-    )
     return resp.count or 0
 
 
@@ -431,25 +372,18 @@ def get_or_create_teacher(name: str) -> int:
     return resp.data[0]["id"]
 
 
-def get_or_create_sub_discipline(name: str, subject_area_id: int) -> int:
+def get_or_create_series(name: str, teacher_id: int | None) -> int:
     sb = get_supabase()
-    resp = sb.table("sub_disciplines").select("id").eq("name", name).maybe_single().execute()
-    if resp.data:
-        return resp.data["id"]
-    resp = sb.table("sub_disciplines").insert({"name": name, "subject_area_id": subject_area_id}).execute()
-    return resp.data[0]["id"]
-
-
-def get_or_create_series(name: str, teacher_id: int | None, subject_area_id: int | None) -> int:
-    sb = get_supabase()
-    resp = sb.table("series").select("id").eq("name", name).maybe_single().execute()
+    # Uniqueness is now per (name, teacher_id)
+    q = sb.table("series").select("id").eq("name", name)
+    if teacher_id:
+        q = q.eq("teacher_id", teacher_id)
+    resp = q.maybe_single().execute()
     if resp.data:
         return resp.data["id"]
     data: dict = {"name": name}
     if teacher_id:
         data["teacher_id"] = teacher_id
-    if subject_area_id:
-        data["subject_area_id"] = subject_area_id
     resp = sb.table("series").insert(data).execute()
     return resp.data[0]["id"]
 
@@ -485,12 +419,10 @@ def _flatten_joins(rows: list[dict]) -> list[dict]:
     flat = []
     for row in rows:
         r = dict(row)
-        for key in ("teachers", "series", "sub_disciplines", "chavurot"):
+        for key in ("teachers", "series", "chavurot"):
             nested = r.pop(key, None)
-            col = key.rstrip("s")  # teachers→teacher, series→series, sub_disciplines→sub_discipline
-            if key == "sub_disciplines":
-                col = "sub_discipline"
-            elif key == "series":
+            col = key.rstrip("s")  # teachers→teacher, series→series
+            if key == "series":
                 col = "series"
             r[f"{col}_name"] = nested["name"] if isinstance(nested, dict) else None
         flat.append(r)

@@ -6,10 +6,9 @@ from telegram.ext import ContextTypes
 from .. import db
 from ..keyboards import (
     teacher_list_keyboard,
-    teacher_subject_keyboard,
+    teacher_years_keyboard,
+    teacher_year_series_keyboard,
     series_list_keyboard,
-    browse_subject_keyboard,
-    sub_discipline_keyboard,
     chavurot_keyboard,
     hebrew_years_keyboard,
     zmanim_keyboard,
@@ -47,16 +46,15 @@ async def _show_teacher_list(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 
 # ---------------------------------------------------------------------------
-# Teacher → subject areas for that teacher
+# Teacher → Hebrew years
 # ---------------------------------------------------------------------------
 
-async def show_teacher_subjects(
+async def show_teacher_years(
     update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int
 ) -> None:
-    areas = db.get_subject_areas_by_teacher(teacher_id)
+    years = db.get_teacher_hebrew_years(teacher_id)
     msg = update.message or update.callback_query.message
 
-    # Look up teacher name from the first result or fall back
     teacher_name = f"מרצה {teacher_id}"
     all_teachers = db.get_teacher_list()
     for t in all_teachers:
@@ -64,42 +62,47 @@ async def show_teacher_subjects(
             teacher_name = t["name"]
             break
 
-    if not areas:
-        # No subject breakdown — go straight to recordings
+    if not years:
         await show_teacher_recordings(update, context, teacher_id=teacher_id, page=0)
         return
 
     await msg.reply_text(
-        f"👤 *{teacher_name}* — בחר תחום:",
+        f"👤 *{teacher_name}* — בחר שנה:",
         parse_mode="Markdown",
-        reply_markup=teacher_subject_keyboard(areas, teacher_id),
+        reply_markup=teacher_years_keyboard(years, teacher_id),
     )
 
 
 # ---------------------------------------------------------------------------
-# Teacher + subject area → sub-disciplines
+# Teacher + year → series
 # ---------------------------------------------------------------------------
 
-async def show_teacher_sub_disciplines(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int, subject_area_id: int
+async def show_teacher_year_series(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int, hebrew_year: str
 ) -> None:
-    subs = db.get_sub_disciplines_by_teacher_and_subject(teacher_id, subject_area_id)
+    series_list = db.get_series_by_teacher_and_year(teacher_id, hebrew_year)
     msg = update.message or update.callback_query.message
 
-    if not subs:
-        # No sub-disciplines — go straight to recordings for teacher+subject
-        await show_teacher_subject_recent(update, context, teacher_id=teacher_id, subject_area_id=subject_area_id)
+    teacher_name = f"מרצה {teacher_id}"
+    all_teachers = db.get_teacher_list()
+    for t in all_teachers:
+        if t["id"] == teacher_id:
+            teacher_name = t["name"]
+            break
+
+    if not series_list:
+        await msg.reply_text("אין סדרות בשנה זו.", reply_markup=back_to_main())
         return
 
     await msg.reply_text(
-        "📂 *בחר תת-תחום:*",
+        f"👤 *{teacher_name}* — 📅 *{hebrew_year}*:",
         parse_mode="Markdown",
-        reply_markup=sub_discipline_keyboard(subs, subject_area_id, teacher_id=teacher_id),
+        reply_markup=teacher_year_series_keyboard(series_list, teacher_id, hebrew_year),
     )
 
 
 # ---------------------------------------------------------------------------
-# Recent recordings for a teacher (all subjects)
+# All recordings for a teacher (used by "כל השיעורים" button)
 # ---------------------------------------------------------------------------
 
 async def show_teacher_recordings(
@@ -118,31 +121,6 @@ async def show_teacher_recordings(
         context_id=teacher_id,
         page=page,
         total_pages=tp,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Recent recordings for a teacher's subject area
-# ---------------------------------------------------------------------------
-
-async def show_teacher_subject_recent(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int, subject_area_id: int
-) -> None:
-    results = db.get_recent_by_teacher(teacher_id, limit=10)
-    # Filter to the subject area if possible (DB already returns all; filter client-side here)
-    # For now show teacher recent — a dedicated RPC can be added later if needed
-    msg = update.message or update.callback_query.message
-    if not results:
-        await msg.reply_text("אין שיעורים.", reply_markup=back_to_main())
-        return
-    await send_results_page(
-        update, context,
-        results=results,
-        header="🕐 *אחרונים*",
-        context_action="teacher_recs",
-        context_id=teacher_id,
-        page=0,
-        total_pages=1,
     )
 
 
@@ -187,94 +165,6 @@ async def show_series_recordings(
         context_id=series_id,
         page=page,
         total_pages=tp,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Subject areas (global browse)
-# ---------------------------------------------------------------------------
-
-async def show_subject_areas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    areas = db.get_subject_areas()
-    msg = update.message or update.callback_query.message
-    await msg.reply_text(
-        "📂 *בחר תחום:*",
-        parse_mode="Markdown",
-        reply_markup=browse_subject_keyboard(areas),
-    )
-
-
-async def show_sub_disciplines(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, subject_area_id: int
-) -> None:
-    subs = db.get_sub_disciplines(subject_area_id)
-    msg = update.message or update.callback_query.message
-    await msg.reply_text(
-        "📂 *בחר תת-תחום:*",
-        parse_mode="Markdown",
-        reply_markup=sub_discipline_keyboard(subs, subject_area_id),
-    )
-
-
-async def show_teacher_sub_discipline_recordings(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, teacher_id: int, sub_discipline_id: int, page: int
-) -> None:
-    results = db.get_recordings_by_teacher_and_sub_discipline(teacher_id, sub_discipline_id, page)
-    total = db.count_by_teacher_and_sub_discipline(teacher_id, sub_discipline_id)
-    tp = total_pages(total, db.PAGE_SIZE)
-
-    teacher_name = results[0]["teacher_name"] if results else f"מרצה {teacher_id}"
-    sub_name = results[0]["sub_discipline_name"] if results else f"תת-תחום {sub_discipline_id}"
-    await send_results_page(
-        update, context,
-        results=results,
-        header=f"👤 *{teacher_name}* — 📂 *{sub_name}* — {total} שיעורים, עמוד {page+1}/{tp}",
-        context_action="teacher_sub_recs",
-        context_id=sub_discipline_id,
-        page=page,
-        total_pages=tp,
-    )
-
-
-async def show_sub_discipline_recordings(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, sub_discipline_id: int, page: int
-) -> None:
-    results = db.get_recordings_by_sub_discipline(sub_discipline_id, page)
-    total = db.count_by_sub_discipline(sub_discipline_id)
-    tp = total_pages(total, db.PAGE_SIZE)
-
-    sub_name = results[0]["sub_discipline_name"] if results else f"תת-תחום {sub_discipline_id}"
-    await send_results_page(
-        update, context,
-        results=results,
-        header=f"📂 *{sub_name}* — {total} שיעורים, עמוד {page+1}/{tp}",
-        context_action="browse_sub",
-        context_id=sub_discipline_id,
-        page=page,
-        total_pages=tp,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Recent recordings for a subject area
-# ---------------------------------------------------------------------------
-
-async def show_subject_area_recent(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, subject_area_id: int
-) -> None:
-    results = db.get_recent_by_subject_area(subject_area_id, limit=10)
-    msg = update.message or update.callback_query.message
-    if not results:
-        await msg.reply_text("אין שיעורים בתחום זה.", reply_markup=back_to_main())
-        return
-    await send_results_page(
-        update, context,
-        results=results,
-        header="🕐 *אחרונים בתחום*",
-        context_action="subj_recent",
-        context_id=subject_area_id,
-        page=0,
-        total_pages=1,
     )
 
 
