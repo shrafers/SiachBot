@@ -146,26 +146,31 @@ def result_card_keyboard(
 ) -> InlineKeyboardMarkup:
     rows = []
 
-    # Download button
+    # Row 1: primary action — download
     rows.append([
         InlineKeyboardButton(
             "⬇ הורדה", callback_data=encode_cb("dl", id=rec["id"])),
+    ])
+
+    # Row 2: discovery
+    rows.append([
         InlineKeyboardButton(
             "עוד כמו זה", callback_data=encode_cb("like", id=rec["id"])),
     ])
 
-    # Prev / Next within series
+    # Row 3: Prev / Next navigation
     if rec.get("series_name") and rec.get("series_id"):
+        # Series navigation — show destination page number
         nav_row = []
         if page > 0:
             nav_row.append(InlineKeyboardButton(
-                "◀ הקודם",
+                f"◀ עמ' {page}",
                 callback_data=encode_cb(
                     "series_recs", id=rec["series_id"], p=page - 1),
             ))
         if page < total_pages - 1:
             nav_row.append(InlineKeyboardButton(
-                "הבא ▶",
+                f"עמ' {page + 2} ▶",
                 callback_data=encode_cb(
                     "series_recs", id=rec["series_id"], p=page + 1),
             ))
@@ -185,6 +190,11 @@ def result_card_keyboard(
         if nav_row:
             rows.append(nav_row)
 
+    # Row 4: back to parent browse context
+    back = _back_cb(context_action, context_id, context_extra)
+    if back:
+        rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=back)])
+
     return InlineKeyboardMarkup(rows)
 
 
@@ -197,6 +207,21 @@ def _build_page_cb(action, page, ctx_id=None, query=None, filter_type=None, **ex
     if filter_type and filter_type != "all":
         kwargs["f"] = filter_type
     return encode_cb(action, **kwargs)
+
+
+def _back_cb(context_action: str, context_id=None, context_extra=None) -> str | None:
+    """Return the callback_data for the 'back to parent browse' button."""
+    if context_action == "series_recs":
+        return encode_cb("browse_series", p=0)
+    elif context_action in ("teacher_recs", "teacher_recent", "teacher_sub_recs"):
+        return encode_cb("browse_teachers", p=0)
+    elif context_action == "zman_recs":
+        return encode_cb("browse_zmanim")
+    elif context_action == "search_page":
+        return encode_cb("search_prompt")
+    elif context_action in ("recent", "browse_chav"):
+        return encode_cb("main_menu")
+    return encode_cb("main_menu")
 
 
 # ---------------------------------------------------------------------------

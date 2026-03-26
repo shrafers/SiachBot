@@ -170,6 +170,7 @@ def get_recent_by_teacher(teacher_id: int, limit: int = 10) -> list[dict]:
 def _recording_select():
     return (
         "id, message_id, title, date, hebrew_date, is_oneoff, "
+        "teacher_id, series_id, "
         "audio_downloaded, audio_r2_path, telegram_link, lesson_number, duration_seconds, "
         "teachers(name), series(name), chavurot(name)"
     )
@@ -267,6 +268,46 @@ def count_by_year_and_semester(hebrew_year: str, semester: str) -> int:
         .select("id", count="exact", head=True)
         .eq("hebrew_year", hebrew_year)
         .eq("semester", semester)
+        .execute()
+    )
+    return resp.count or 0
+
+
+def get_studied_figure_ids(recording_id: int) -> list[dict]:
+    """Returns [{id, name}] for all studied figures linked to a recording."""
+    sb = get_supabase()
+    resp = (
+        sb.table("recording_studied_figures")
+        .select("figure_id, studied_figures(name)")
+        .eq("recording_id", recording_id)
+        .execute()
+    )
+    return [
+        {"id": r["figure_id"], "name": r["studied_figures"]["name"]}
+        for r in (resp.data or [])
+        if r.get("studied_figures")
+    ]
+
+
+def get_recordings_by_studied_figure(figure_id: int, page: int = 0) -> list[dict]:
+    sb = get_supabase()
+    resp = (
+        sb.table("recording_studied_figures")
+        .select(f"recordings({_recording_select()})")
+        .eq("figure_id", figure_id)
+        .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+        .execute()
+    )
+    rows = [r["recordings"] for r in (resp.data or []) if r.get("recordings")]
+    return _flatten_joins(rows)
+
+
+def count_by_studied_figure(figure_id: int) -> int:
+    sb = get_supabase()
+    resp = (
+        sb.table("recording_studied_figures")
+        .select("figure_id", count="exact", head=True)
+        .eq("figure_id", figure_id)
         .execute()
     )
     return resp.count or 0

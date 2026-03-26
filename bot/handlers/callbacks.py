@@ -292,13 +292,17 @@ async def _handle_like(
     if not rec:
         return
 
-    # Priority: same series > same teacher + subject > default by teacher
+    results = total = header = ctx_action = ctx_id = None
+
+    # 1. Same series
     if rec.get("series_id"):
         results = db.get_recordings_by_series(rec["series_id"], page=0)
         total = db.count_by_series(rec["series_id"])
         header = f"📚 עוד מהסדרה: *{rec.get('series_name', '')}*"
         ctx_action = "series_recs"
         ctx_id = rec["series_id"]
+
+    # 2. Same teacher
     elif rec.get("teacher_id"):
         results = db.get_recordings_by_teacher(rec["teacher_id"], page=0)
         total = db.count_by_teacher(rec["teacher_id"])
@@ -306,7 +310,19 @@ async def _handle_like(
         header = f"👤 עוד מ: *{teacher}*"
         ctx_action = "teacher_recent"
         ctx_id = rec["teacher_id"]
+
+    # 3. Same studied figure (first one found)
     else:
+        figures = db.get_studied_figure_ids(recording_id)
+        if figures:
+            fig = figures[0]
+            results = db.get_recordings_by_studied_figure(fig["id"], page=0)
+            total = db.count_by_studied_figure(fig["id"])
+            header = f"📖 עוד על: *{fig['name']}*"
+            ctx_action = "browse_sub"
+            ctx_id = None
+
+    if not results:
         await update.callback_query.message.reply_text("לא נמצאו שיעורים דומים.")
         return
 
