@@ -2,10 +2,25 @@
 
 import math
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 from .utils import encode_cb
 from .db import PAGE_SIZE, LIST_SIZE
+
+
+# ---------------------------------------------------------------------------
+# Persistent bottom quick-access keyboard
+# ---------------------------------------------------------------------------
+
+def quick_access_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [
+            ["🏠 תפריט ראשי", "❓ עזרה"],
+            ["🔍 חיפוש", "⬆️ העלאת שיעור"],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
 
 # ---------------------------------------------------------------------------

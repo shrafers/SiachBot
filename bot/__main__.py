@@ -13,7 +13,7 @@ from telegram.ext import (
     filters,
 )
 
-from .handlers.start import start
+from .handlers.start import start, help_handler
 from .handlers.search import search_command, handle_search_text
 from .handlers.browse import series_command, teacher_command
 from .handlers.upload import (
@@ -36,7 +36,24 @@ AUDIO_FILTER = filters.AUDIO | filters.VOICE | filters.Document.AUDIO
 
 async def _text_router(update: Update, context) -> None:
     """Route free-text messages based on what the bot is currently awaiting."""
+    text = (update.message.text or "").strip()
     awaiting = context.user_data.get("awaiting")
+
+    # Persistent bottom-keyboard buttons — always handled regardless of state
+    if text == "🏠 תפריט ראשי":
+        await start(update, context)
+        return
+    elif text == "❓ עזרה":
+        await help_handler(update, context)
+        return
+    elif text == "🔍 חיפוש":
+        context.user_data["awaiting"] = "search_query"
+        await update.message.reply_text("הקלד את מה שאתה מחפש:")
+        return
+    elif text == "⬆️ העלאת שיעור":
+        context.user_data["awaiting"] = "upload_audio"
+        await update.message.reply_text("שלח קובץ שמע (mp3/m4a/ogg) עם כיתוב אופציונלי:")
+        return
 
     if awaiting == "search_query":
         await handle_search_text(update, context)
@@ -59,6 +76,7 @@ def main() -> None:
 
     # Commands
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_handler))
     app.add_handler(CommandHandler("search", search_command))
     app.add_handler(CommandHandler("series", series_command))
     app.add_handler(CommandHandler("teacher", teacher_command))
