@@ -412,7 +412,7 @@ def get_or_create_teacher(name: str) -> int:
     resp = sb.table("teachers").select("id").eq("name", name).maybe_single().execute()
     if resp.data:
         return resp.data["id"]
-    resp = sb.table("teachers").insert({"name": name}).execute()
+    resp = sb.table("teachers").insert({"name": name}).select("id").execute()
     return resp.data[0]["id"]
 
 
