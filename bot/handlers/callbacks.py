@@ -38,6 +38,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         context.user_data["awaiting"] = "upload_audio"
         await query.message.reply_text("שלח קובץ שמע (mp3/m4a/ogg) עם כיתוב אופציונלי:")
 
+    elif action == "record_prompt":
+        await query.message.reply_text(
+            "🎙 *להקלטת שיעור:*\n\n"
+            "החזק את אייקון המיקרופון ⬇️ כדי להקליט, ושחרר כשתסיים.\n"
+            "השיעור יישלח ישירות לבוט ותוכל להוסיף פרטים.",
+            parse_mode="Markdown",
+        )
+
     # ------------------------------------------------------------------
     # Browse — teachers
     # ------------------------------------------------------------------

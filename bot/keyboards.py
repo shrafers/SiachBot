@@ -32,6 +32,10 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 "⬆️ העלאת שיעור", callback_data=encode_cb("upload_prompt")),
         ],
+        [
+            InlineKeyboardButton(
+                "🎙 הקלטת שיעור", callback_data=encode_cb("record_prompt")),
+        ],
     ])
 
 
@@ -152,13 +156,7 @@ def result_card_keyboard(
             "⬇ הורדה", callback_data=encode_cb("dl", id=rec["id"])),
     ])
 
-    # Row 2: discovery
-    rows.append([
-        InlineKeyboardButton(
-            "עוד כמו זה", callback_data=encode_cb("like", id=rec["id"])),
-    ])
-
-    # Row 3: Prev / Next navigation
+    # Row 2: Prev / Next navigation
     if rec.get("series_name") and rec.get("series_id"):
         # Series navigation — show destination page number
         nav_row = []
