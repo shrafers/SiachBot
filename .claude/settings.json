@@ -33,7 +33,8 @@
       "Bash(TOKEN=\"2116512480:AAGXQI3ngbV_wSQl52cJHjySUs2poVp4ei4\")",
       "Bash(railway ssh:*)",
       "Bash(git push:*)",
-      "mcp__supabase__apply_migration"
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__execute_sql"
     ]
   }
 }
