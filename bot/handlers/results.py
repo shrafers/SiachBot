@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 
 from ..utils import format_result_card, encode_cb
 from ..keyboards import result_card_keyboard
+from . import admin as admin_handlers
 
 
 async def send_results_page(
@@ -26,12 +27,16 @@ async def send_results_page(
     if not msg:
         return
 
+    user_id = (update.effective_user or update.message.from_user).id if update.message else (
+        update.callback_query.from_user.id if update.callback_query else 0
+    )
+    trusted = admin_handlers.is_trusted(user_id)
+
     # Send header
     await msg.reply_text(header, parse_mode="Markdown")
 
     for i, rec in enumerate(results):
         card_text = format_result_card(rec)
-        rec_page = page  # position of this result within the result list
 
         keyboard = result_card_keyboard(
             rec=rec,
@@ -42,6 +47,7 @@ async def send_results_page(
             context_query=context_query,
             context_filter=context_filter,
             context_extra=context_extra,
+            is_trusted=trusted,
         )
 
         await msg.reply_text(card_text, parse_mode="Markdown", reply_markup=keyboard)

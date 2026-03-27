@@ -213,6 +213,65 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             context.user_data["awaiting"] = "upload_form"
             await upload_handlers.restart_form(update, context)
 
+    # ------------------------------------------------------------------
+    # Manage flow (trusted users)
+    # ------------------------------------------------------------------
+    elif action == "manage":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.show_manage_view_cb(update, context, recording_id=data["id"])
+
+    elif action == "mg_series":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_pick_series(update, context, recording_id=data["id"])
+
+    elif action == "mg_ser_pick":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_confirm_series(update, context, recording_id=data["id"], series_id=data["sid"])
+
+    elif action == "mg_ser_ok":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_apply_series(update, context, recording_id=data["id"], series_id=data["sid"])
+
+    elif action == "mg_rm_series":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_remove_series(update, context, recording_id=data["id"])
+
+    elif action == "mg_rm_ser_ok":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_apply_remove_series(update, context, recording_id=data["id"])
+
+    elif action == "mg_teacher":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_pick_teacher(update, context, recording_id=data["id"])
+
+    elif action == "mg_tea_pick":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_confirm_teacher(update, context, recording_id=data["id"], teacher_id=data["tid"])
+
+    elif action == "mg_tea_ok":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_apply_teacher(update, context, recording_id=data["id"], teacher_id=data["tid"])
+
+    elif action == "mg_rm_teacher":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_remove_teacher(update, context, recording_id=data["id"])
+
+    elif action == "mg_rm_tea_ok":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_apply_remove_teacher(update, context, recording_id=data["id"])
+
+    elif action == "mg_title":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_edit_title_prompt(update, context, recording_id=data["id"])
+
+    elif action == "mg_delete":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_delete_confirm(update, context, recording_id=data["id"])
+
+    elif action == "mg_del_ok":
+        if admin_handlers.is_trusted(query.from_user.id):
+            await admin_handlers.manage_apply_delete(update, context, recording_id=data["id"])
+
     elif action == "noop":
         pass  # pagination counter button — do nothing
 

@@ -12,15 +12,14 @@ from .db import PAGE_SIZE, LIST_SIZE
 # Persistent bottom quick-access keyboard
 # ---------------------------------------------------------------------------
 
-def quick_access_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [
-            ["🏠 תפריט ראשי", "❓ עזרה"],
-            ["🔍 חיפוש", "⬆️ העלאת שיעור"],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
+def quick_access_keyboard(trusted: bool = False) -> ReplyKeyboardMarkup:
+    rows = [
+        ["🏠 תפריט ראשי", "❓ עזרה"],
+        ["🔍 חיפוש", "⬆️ העלאת שיעור"],
+    ]
+    if trusted:
+        rows.append(["⚙️ ניהול"])
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +161,7 @@ def result_card_keyboard(
     context_query: str | None = None,
     context_filter: str | None = None,
     context_extra: dict | None = None,  # arbitrary extra kwargs for prev/next callbacks
+    is_trusted: bool = False,
 ) -> InlineKeyboardMarkup:
     rows = []
 
@@ -207,6 +207,13 @@ def result_card_keyboard(
     back = _back_cb(context_action, context_id, context_extra)
     if back:
         rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=back)])
+
+    # Row 5: manage button (trusted users only)
+    if is_trusted and rec.get("id"):
+        rows.append([InlineKeyboardButton(
+            f"⚙️ נהל שיעור #{rec['id']}",
+            callback_data=encode_cb("manage", id=rec["id"]),
+        )])
 
     return InlineKeyboardMarkup(rows)
 
@@ -358,6 +365,71 @@ def back_to_main() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "🔙 תפריט ראשי", callback_data=encode_cb("main_menu"))
+    ]])
+
+
+# ---------------------------------------------------------------------------
+# Manage keyboards
+# ---------------------------------------------------------------------------
+
+def manage_actions_keyboard(recording_id: int) -> InlineKeyboardMarkup:
+    """Main action menu for managing a recording."""
+    rid = recording_id
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🗂 שנה סדרה", callback_data=encode_cb("mg_series", id=rid)),
+            InlineKeyboardButton("✂️ הסר סדרה", callback_data=encode_cb("mg_rm_series", id=rid)),
+        ],
+        [
+            InlineKeyboardButton("👤 שנה מרצה", callback_data=encode_cb("mg_teacher", id=rid)),
+            InlineKeyboardButton("✂️ הסר מרצה", callback_data=encode_cb("mg_rm_teacher", id=rid)),
+        ],
+        [
+            InlineKeyboardButton("✏️ ערוך כותרת", callback_data=encode_cb("mg_title", id=rid)),
+        ],
+        [
+            InlineKeyboardButton("🗑 מחק שיעור", callback_data=encode_cb("mg_delete", id=rid)),
+        ],
+        [
+            InlineKeyboardButton("🔙 סגור", callback_data=encode_cb("noop")),
+        ],
+    ])
+
+
+def manage_series_pick_keyboard(series_list: list[dict], recording_id: int) -> InlineKeyboardMarkup:
+    """List of series to pick from when moving a recording."""
+    rows = []
+    for s in series_list:
+        rows.append([InlineKeyboardButton(
+            s["name"],
+            callback_data=encode_cb("mg_ser_pick", id=recording_id, sid=s["id"]),
+        )])
+    rows.append([InlineKeyboardButton(
+        "❌ ביטול", callback_data=encode_cb("manage", id=recording_id))])
+    return InlineKeyboardMarkup(rows)
+
+
+def manage_teacher_pick_keyboard(teachers: list[dict], recording_id: int) -> InlineKeyboardMarkup:
+    """List of teachers to pick from when changing a recording's teacher."""
+    rows = []
+    for i in range(0, len(teachers), 2):
+        row = []
+        for t in teachers[i:i+2]:
+            row.append(InlineKeyboardButton(
+                t["name"],
+                callback_data=encode_cb("mg_tea_pick", id=recording_id, tid=t["id"]),
+            ))
+        rows.append(row)
+    rows.append([InlineKeyboardButton(
+        "❌ ביטול", callback_data=encode_cb("manage", id=recording_id))])
+    return InlineKeyboardMarkup(rows)
+
+
+def manage_confirm_keyboard(confirm_action: str, recording_id: int, **extra) -> InlineKeyboardMarkup:
+    """Generic confirm / cancel keyboard for manage operations."""
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ אשר", callback_data=encode_cb(confirm_action, id=recording_id, **extra)),
+        InlineKeyboardButton("❌ ביטול", callback_data=encode_cb("manage", id=recording_id)),
     ]])
 
 

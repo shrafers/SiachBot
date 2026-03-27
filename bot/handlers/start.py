@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from ..keyboards import main_menu_keyboard, quick_access_keyboard
+from . import admin as admin_handlers
 
 WELCOME = (
     "ברוך הבא לארכיון שיעורי הישיבה! 🎓\n"
@@ -46,8 +47,10 @@ def _build_help_text() -> str:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    trusted = admin_handlers.is_trusted(user_id)
     # Send welcome with persistent keyboard to install/replace the bottom bar
-    await update.message.reply_text(WELCOME, reply_markup=quick_access_keyboard())
+    await update.message.reply_text(WELCOME, reply_markup=quick_access_keyboard(trusted=trusted))
     # Then show the inline main menu
     await update.message.reply_text("בחר פעולה:", reply_markup=main_menu_keyboard())
 

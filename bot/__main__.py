@@ -20,7 +20,10 @@ from .handlers.upload import (
     handle_audio, handle_form_reply,
     handle_new_teacher_text, handle_new_series_text,
 )
-from .handlers.admin import review_command
+from .handlers.admin import (
+    review_command, manage_command, trust_command,
+    handle_manage_id_text, handle_manage_title_text,
+)
 from .handlers.callbacks import handle_callback
 
 load_dotenv()
@@ -55,6 +58,13 @@ async def _text_router(update: Update, context) -> None:
         await update.message.reply_text("שלח קובץ שמע (mp3/m4a/ogg) עם כיתוב אופציונלי:")
         return
 
+    if text == "⚙️ ניהול":
+        from .handlers.admin import is_trusted
+        if is_trusted(update.message.from_user.id):
+            context.user_data["awaiting"] = "manage_id"
+            await update.message.reply_text("שלח מספר שיעור (לדוגמה: 247 או #247):")
+        return
+
     if awaiting == "search_query":
         await handle_search_text(update, context)
     elif awaiting == "upload_form":
@@ -63,6 +73,10 @@ async def _text_router(update: Update, context) -> None:
         await handle_new_teacher_text(update, context)
     elif awaiting == "upload_new_series":
         await handle_new_series_text(update, context)
+    elif awaiting == "manage_id":
+        await handle_manage_id_text(update, context)
+    elif awaiting == "manage_title":
+        await handle_manage_title_text(update, context)
     else:
         # Unrecognised text — show main menu hint
         from .handlers.start import WELCOME
@@ -81,6 +95,8 @@ def main() -> None:
     app.add_handler(CommandHandler("series", series_command))
     app.add_handler(CommandHandler("teacher", teacher_command))
     app.add_handler(CommandHandler("review", review_command))
+    app.add_handler(CommandHandler("manage", manage_command))
+    app.add_handler(CommandHandler("trust", trust_command))
 
     # Audio files
     app.add_handler(MessageHandler(AUDIO_FILTER, handle_audio))

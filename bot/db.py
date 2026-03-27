@@ -440,6 +440,7 @@ def needs_review_next(skip_ids: list[int] | None = None) -> dict | None:
         sb.table("recordings")
         .select(_recording_select())
         .eq("needs_human_review", True)
+        .is_("deleted_at", "null")
         .order("date", desc=True)
         .limit(1)
     )
@@ -454,6 +455,62 @@ def needs_review_next(skip_ids: list[int] | None = None) -> dict | None:
 def mark_reviewed(recording_id: int) -> None:
     sb = get_supabase()
     sb.table("recordings").update({"needs_human_review": False}).eq("id", recording_id).execute()
+
+
+# ---------------------------------------------------------------------------
+# Manage — update recording fields, soft delete
+# ---------------------------------------------------------------------------
+
+def get_recording_by_display_id(display_id: int) -> dict | None:
+    """Fetch a non-deleted recording by its DB id (the #id shown to users)."""
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select(
+            _recording_select() + ", "
+            "recording_tags(tag), recording_studied_figures(studied_figures(name))"
+        )
+        .eq("id", display_id)
+        .is_("deleted_at", "null")
+        .maybe_single()
+        .execute()
+    )
+    if not resp.data:
+        return None
+    row = _flatten_joins([resp.data])[0]
+    row["tags"] = [t["tag"] for t in (resp.data.get("recording_tags") or [])]
+    row["studied_figures"] = [
+        sf["studied_figures"]["name"]
+        for sf in (resp.data.get("recording_studied_figures") or [])
+        if sf.get("studied_figures")
+    ]
+    return row
+
+
+def update_recording_series(recording_id: int, series_id: int | None) -> None:
+    sb = get_supabase()
+    update = {"series_id": series_id}
+    if series_id is None:
+        update["lesson_number"] = None
+    sb.table("recordings").update(update).eq("id", recording_id).execute()
+
+
+def update_recording_teacher(recording_id: int, teacher_id: int | None) -> None:
+    sb = get_supabase()
+    sb.table("recordings").update({"teacher_id": teacher_id}).eq("id", recording_id).execute()
+
+
+def update_recording_title(recording_id: int, title: str) -> None:
+    sb = get_supabase()
+    sb.table("recordings").update({"title": title}).eq("id", recording_id).execute()
+
+
+def soft_delete_recording(recording_id: int) -> None:
+    sb = get_supabase()
+    from datetime import datetime, timezone
+    sb.table("recordings").update({
+        "deleted_at": datetime.now(timezone.utc).isoformat()
+    }).eq("id", recording_id).execute()
 
 
 # ---------------------------------------------------------------------------
