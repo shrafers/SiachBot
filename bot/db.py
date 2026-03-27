@@ -1,6 +1,7 @@
 """Supabase query layer — all DB interactions live here."""
 
 import os
+import time
 from functools import lru_cache
 
 from dotenv import load_dotenv
@@ -10,6 +11,47 @@ load_dotenv()
 
 PAGE_SIZE = 5   # results per page for recordings
 LIST_SIZE = 10  # items per page for browse lists
+
+# ---------------------------------------------------------------------------
+# Trusted users cache (refreshed every 60 seconds)
+# ---------------------------------------------------------------------------
+
+_trusted_cache: set[int] = set()
+_trusted_cache_ts: float = 0.0
+_TRUSTED_CACHE_TTL = 60.0
+
+
+def get_trusted_user_ids() -> set[int]:
+    global _trusted_cache, _trusted_cache_ts
+    if time.monotonic() - _trusted_cache_ts > _TRUSTED_CACHE_TTL:
+        sb = get_supabase()
+        resp = sb.table("trusted_users").select("telegram_user_id").execute()
+        _trusted_cache = {r["telegram_user_id"] for r in (resp.data or [])}
+        _trusted_cache_ts = time.monotonic()
+    return _trusted_cache
+
+
+def add_trusted_user(user_id: int, added_by: int) -> None:
+    sb = get_supabase()
+    sb.table("trusted_users").upsert({
+        "telegram_user_id": user_id,
+        "added_by": added_by,
+    }).execute()
+    global _trusted_cache_ts
+    _trusted_cache_ts = 0.0  # invalidate cache
+
+
+def remove_trusted_user(user_id: int) -> None:
+    sb = get_supabase()
+    sb.table("trusted_users").delete().eq("telegram_user_id", user_id).execute()
+    global _trusted_cache_ts
+    _trusted_cache_ts = 0.0  # invalidate cache
+
+
+def list_trusted_users() -> list[dict]:
+    sb = get_supabase()
+    resp = sb.table("trusted_users").select("telegram_user_id, added_by, added_at").order("added_at").execute()
+    return resp.data or []
 
 
 @lru_cache(maxsize=1)
@@ -40,6 +82,7 @@ def search_recordings(query: str, page: int = 0, filter_type: str = "all") -> li
             "audio_downloaded, audio_r2_path, telegram_link, lesson_number, duration_seconds, "
             "teachers(name), series(name), chavurot(name)"
         )
+        .is_("deleted_at", "null")
         .text_search("title", query, config="simple")
         .order("date", desc=True)
         .range(offset, offset + PAGE_SIZE - 1)
@@ -60,6 +103,7 @@ def count_search(query: str, filter_type: str = "all") -> int:
     q = (
         sb.table("recordings")
         .select("id", count="exact", head=True)
+        .is_("deleted_at", "null")
         .text_search("title", query, config="simple")
     )
     if filter_type == "series":
@@ -131,6 +175,7 @@ def get_standalone_recordings_by_teacher(teacher_id: int, page: int = 0) -> list
         .select(_recording_select())
         .eq("teacher_id", teacher_id)
         .is_("series_id", "null")
+        .is_("deleted_at", "null")
         .order("date", desc=True)
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
         .execute()
@@ -145,6 +190,7 @@ def count_standalone_by_teacher(teacher_id: int) -> int:
         .select("id", count="exact", head=True)
         .eq("teacher_id", teacher_id)
         .is_("series_id", "null")
+        .is_("deleted_at", "null")
         .execute()
     )
     return resp.count or 0
@@ -156,6 +202,7 @@ def get_recent_by_teacher(teacher_id: int, limit: int = 10) -> list[dict]:
         sb.table("recordings")
         .select(_recording_select())
         .eq("teacher_id", teacher_id)
+        .is_("deleted_at", "null")
         .order("date", desc=True)
         .limit(limit)
         .execute()
@@ -182,6 +229,7 @@ def get_recordings_by_teacher(teacher_id: int, page: int = 0) -> list[dict]:
         sb.table("recordings")
         .select(_recording_select())
         .eq("teacher_id", teacher_id)
+        .is_("deleted_at", "null")
         .order("date", desc=True)
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
         .execute()
@@ -191,7 +239,7 @@ def get_recordings_by_teacher(teacher_id: int, page: int = 0) -> list[dict]:
 
 def count_by_teacher(teacher_id: int) -> int:
     sb = get_supabase()
-    resp = sb.table("recordings").select("id", count="exact", head=True).eq("teacher_id", teacher_id).execute()
+    resp = sb.table("recordings").select("id", count="exact", head=True).eq("teacher_id", teacher_id).is_("deleted_at", "null").execute()
     return resp.count or 0
 
 
@@ -201,6 +249,7 @@ def get_recordings_by_series(series_id: int, page: int = 0) -> list[dict]:
         sb.table("recordings")
         .select(_recording_select())
         .eq("series_id", series_id)
+        .is_("deleted_at", "null")
         .order("lesson_number", desc=False, nullsfirst=False)
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
         .execute()
@@ -210,7 +259,7 @@ def get_recordings_by_series(series_id: int, page: int = 0) -> list[dict]:
 
 def count_by_series(series_id: int) -> int:
     sb = get_supabase()
-    resp = sb.table("recordings").select("id", count="exact", head=True).eq("series_id", series_id).execute()
+    resp = sb.table("recordings").select("id", count="exact", head=True).eq("series_id", series_id).is_("deleted_at", "null").execute()
     return resp.count or 0
 
 
@@ -220,6 +269,7 @@ def get_recordings_by_chavura(chavura_id: int, page: int = 0) -> list[dict]:
         sb.table("recordings")
         .select(_recording_select())
         .eq("chavura_id", chavura_id)
+        .is_("deleted_at", "null")
         .order("date", desc=True)
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
         .execute()
@@ -229,7 +279,7 @@ def get_recordings_by_chavura(chavura_id: int, page: int = 0) -> list[dict]:
 
 def count_by_chavura(chavura_id: int) -> int:
     sb = get_supabase()
-    resp = sb.table("recordings").select("id", count="exact", head=True).eq("chavura_id", chavura_id).execute()
+    resp = sb.table("recordings").select("id", count="exact", head=True).eq("chavura_id", chavura_id).is_("deleted_at", "null").execute()
     return resp.count or 0
 
 
@@ -254,6 +304,7 @@ def get_recordings_by_year_and_semester(hebrew_year: str, semester: str, page: i
         .select(_recording_select())
         .eq("hebrew_year", hebrew_year)
         .eq("semester", semester)
+        .is_("deleted_at", "null")
         .order("date", desc=True)
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
         .execute()
@@ -268,6 +319,7 @@ def count_by_year_and_semester(hebrew_year: str, semester: str) -> int:
         .select("id", count="exact", head=True)
         .eq("hebrew_year", hebrew_year)
         .eq("semester", semester)
+        .is_("deleted_at", "null")
         .execute()
     )
     return resp.count or 0
@@ -318,6 +370,7 @@ def get_recent_recordings(limit: int = 10) -> list[dict]:
     resp = (
         sb.table("recordings")
         .select(_recording_select())
+        .is_("deleted_at", "null")
         .order("created_at", desc=True)
         .limit(limit)
         .execute()

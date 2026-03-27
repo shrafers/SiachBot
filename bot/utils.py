@@ -60,8 +60,13 @@ def format_result_card(rec: dict) -> str:
         lines.append("🏷 " + ", ".join(_esc(t) for t in all_tags[:5]))
 
     duration = rec.get("duration_seconds")
-    if duration:
+    rec_id = rec.get("id")
+    if duration and rec_id:
+        lines.append(f"⏱ {format_duration(duration)}  ·  #{rec_id}")
+    elif duration:
         lines.append(f"⏱ {format_duration(duration)}")
+    elif rec_id:
+        lines.append(f"#{rec_id}")
 
     return "\n".join(lines)
 
