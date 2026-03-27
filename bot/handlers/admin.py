@@ -178,7 +178,11 @@ async def manage_confirm_series(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def manage_apply_series(update: Update, context: ContextTypes.DEFAULT_TYPE, recording_id: int, series_id: int) -> None:
+    rec = db.get_recording_by_display_id(recording_id)
+    old_series_id = rec.get("series_id") if rec else None
     db.update_recording_series(recording_id, series_id)
+    if old_series_id and old_series_id != series_id:
+        db.delete_series_if_empty(old_series_id)
     await update.callback_query.answer("✅ סדרה עודכנה")
     await _show_manage_view(update, context, recording_id)
 
@@ -194,7 +198,10 @@ async def manage_remove_series(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def manage_apply_remove_series(update: Update, context: ContextTypes.DEFAULT_TYPE, recording_id: int) -> None:
+    rec = db.get_recording_by_display_id(recording_id)
+    old_series_id = rec.get("series_id") if rec else None
     db.update_recording_series(recording_id, None)
+    db.delete_series_if_empty(old_series_id)
     await update.callback_query.answer("✅ סדרה הוסרה")
     await _show_manage_view(update, context, recording_id)
 
@@ -245,7 +252,10 @@ async def manage_remove_teacher(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def manage_apply_remove_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE, recording_id: int) -> None:
+    rec = db.get_recording_by_display_id(recording_id)
+    old_teacher_id = rec.get("teacher_id") if rec else None
     db.update_recording_teacher(recording_id, None)
+    db.delete_teacher_if_empty(old_teacher_id)
     await update.callback_query.answer("✅ מרצה הוסר")
     await _show_manage_view(update, context, recording_id)
 
@@ -289,7 +299,12 @@ async def manage_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def manage_apply_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, recording_id: int) -> None:
+    rec = db.get_recording_by_display_id(recording_id)
+    old_series_id = rec.get("series_id") if rec else None
+    old_teacher_id = rec.get("teacher_id") if rec else None
     db.soft_delete_recording(recording_id)
+    db.delete_series_if_empty(old_series_id)
+    db.delete_teacher_if_empty(old_teacher_id)
     await update.callback_query.answer("🗑 שיעור נמחק")
     await update.callback_query.message.reply_text(f"✅ שיעור #{recording_id} נמחק.")
 

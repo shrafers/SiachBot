@@ -513,6 +513,42 @@ def soft_delete_recording(recording_id: int) -> None:
     }).eq("id", recording_id).execute()
 
 
+def delete_series_if_empty(series_id: int | None) -> bool:
+    """Delete series if it has no non-deleted recordings. Returns True if deleted."""
+    if not series_id:
+        return False
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select("id", count="exact", head=True)
+        .eq("series_id", series_id)
+        .is_("deleted_at", "null")
+        .execute()
+    )
+    if (resp.count or 0) == 0:
+        sb.table("series").delete().eq("id", series_id).execute()
+        return True
+    return False
+
+
+def delete_teacher_if_empty(teacher_id: int | None) -> bool:
+    """Delete teacher if they have no non-deleted recordings. Returns True if deleted."""
+    if not teacher_id:
+        return False
+    sb = get_supabase()
+    resp = (
+        sb.table("recordings")
+        .select("id", count="exact", head=True)
+        .eq("teacher_id", teacher_id)
+        .is_("deleted_at", "null")
+        .execute()
+    )
+    if (resp.count or 0) == 0:
+        sb.table("teachers").delete().eq("id", teacher_id).execute()
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Get-or-create helpers (for upload flow — resolve names to IDs)
 # ---------------------------------------------------------------------------
