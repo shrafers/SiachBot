@@ -21,7 +21,8 @@ HELP_TEXT = (
     "🕐 *אחרונים* — השיעורים שנוספו לאחרונה\n"
     "⬆️ *העלאת שיעור* — הוסף שיעור חדש לארכיון\n\n"
     "\\-\\-\\-\n"
-    "💬 לשאלות, הצעות ודיווח על בעיות:\n"
+    "💬 *יש שאלה? בעיה? הצעה?*\n"
+    "מוזמנים לפנות למנהל הבוט בכל עניין \\— נשמח לשמוע\\!\n"
     "{admin_line}\n\n"
     "{channel_line}"
 )
@@ -34,7 +35,7 @@ def _build_help_text() -> str:
     if admin_username:
         admin_line = f"👤 [פנה למנהל](https://t.me/{admin_username})"
     else:
-        admin_line = "👤 פנה למנהל הבוט"
+        admin_line = "👤 פנה למנהל הבוט לכל שאלה או הצעה"
 
     if channel_link:
         channel_line = f"📢 [הצטרף לערוץ]({channel_link})"
