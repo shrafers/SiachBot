@@ -428,7 +428,7 @@ def get_or_create_series(name: str, teacher_id: int | None) -> int:
     data: dict = {"name": name}
     if teacher_id:
         data["teacher_id"] = teacher_id
-    resp = sb.table("series").insert(data).execute()
+    resp = sb.table("series").insert(data).select("id").execute()
     return resp.data[0]["id"]
 
 

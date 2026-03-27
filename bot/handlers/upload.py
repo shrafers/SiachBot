@@ -386,51 +386,55 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await status.edit_text("⬛⬛⬛⬜ שומר בבסיס הנתונים...")
 
-    # ------------------------------------------------------------------
-    # Resolve entity IDs — create new records if name is new
-    # ------------------------------------------------------------------
-    teacher_id = form.get("teacher_id")
-    if not teacher_id and form.get("teacher"):
-        teacher_id = db.get_or_create_teacher(form["teacher"])
+    try:
+        # ------------------------------------------------------------------
+        # Resolve entity IDs — create new records if name is new
+        # ------------------------------------------------------------------
+        teacher_id = form.get("teacher_id")
+        if not teacher_id and form.get("teacher"):
+            teacher_id = db.get_or_create_teacher(form["teacher"])
 
-    series_id = form.get("series_id")
-    if not series_id and form.get("series_name"):
-        series_id = db.get_or_create_series(form["series_name"], teacher_id)
+        series_id = form.get("series_id")
+        if not series_id and form.get("series_name"):
+            series_id = db.get_or_create_series(form["series_name"], teacher_id)
 
-    # ------------------------------------------------------------------
-    # Hebrew date fields (computed from today's date)
-    # ------------------------------------------------------------------
-    hdate = hebdates.HebrewDate.from_pydate(today)
+        # ------------------------------------------------------------------
+        # Hebrew date fields (computed from today's date)
+        # ------------------------------------------------------------------
+        hdate = hebdates.HebrewDate.from_pydate(today)
 
-    # ------------------------------------------------------------------
-    # Build row
-    # ------------------------------------------------------------------
-    title = form.get("title") or form.get("series_name") or form.get("teacher") or filename
-    notes = form.get("notes")
-    if notes:
-        title = f"{title} — {notes}"
+        # ------------------------------------------------------------------
+        # Build row
+        # ------------------------------------------------------------------
+        title = form.get("title") or form.get("series_name") or form.get("teacher") or filename
+        notes = form.get("notes")
+        if notes:
+            title = f"{title} — {notes}"
 
-    row = {
-        "message_id": fake_message_id,
-        "title": title,
-        "filename": filename,
-        "date": today.isoformat(),
-        "hebrew_date": _hebrew_date_str(hdate),
-        "hebrew_year": _hebrew_year_str(hdate),
-        "semester": _semester(hdate),
-        "teacher_id": teacher_id,
-        "series_id": series_id,
-        "audio_downloaded": True,
-        "audio_r2_path": r2_path,
-        "needs_human_review": False,
-        "tagged_by": "manual-upload",
-        "duration_seconds": state.get("duration"),
-        "file_size_bytes": state.get("file_size"),
-    }
-    if isinstance(form.get("lesson_number"), int):
-        row["lesson_number"] = form["lesson_number"]
+        row = {
+            "message_id": fake_message_id,
+            "title": title,
+            "filename": filename,
+            "date": today.isoformat(),
+            "hebrew_date": _hebrew_date_str(hdate),
+            "hebrew_year": _hebrew_year_str(hdate),
+            "semester": _semester(hdate),
+            "teacher_id": teacher_id,
+            "series_id": series_id,
+            "audio_downloaded": True,
+            "audio_r2_path": r2_path,
+            "needs_human_review": False,
+            "tagged_by": "manual-upload",
+            "duration_seconds": state.get("duration"),
+            "file_size_bytes": state.get("file_size"),
+        }
+        if isinstance(form.get("lesson_number"), int):
+            row["lesson_number"] = form["lesson_number"]
 
-    db.insert_new_recording(row)
+        db.insert_new_recording(row)
+    except Exception as e:
+        await status.edit_text(f"❌ שגיאה בשמירה בבסיס הנתונים:\n{e}")
+        return
 
     try:
         preview = _format_preview(form, filename)
