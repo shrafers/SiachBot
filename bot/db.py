@@ -3,6 +3,7 @@
 import os
 from functools import lru_cache
 
+import psycopg2
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -407,29 +408,36 @@ def mark_reviewed(recording_id: int) -> None:
 # Get-or-create helpers (for upload flow — resolve names to IDs)
 # ---------------------------------------------------------------------------
 
+def _pg_conn():
+    return psycopg2.connect(os.environ["DATABASE_URL"])
+
+
 def get_or_create_teacher(name: str) -> int:
-    sb = get_supabase()
-    resp = sb.table("teachers").select("id").eq("name", name).maybe_single().execute()
-    if resp.data:
-        return resp.data["id"]
-    resp = sb.table("teachers").insert({"name": name}).select("id").execute()
-    return resp.data[0]["id"]
+    with _pg_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM teachers WHERE name = %s", (name,))
+            row = cur.fetchone()
+            if row:
+                return row[0]
+            cur.execute("INSERT INTO teachers (name) VALUES (%s) RETURNING id", (name,))
+            return cur.fetchone()[0]
 
 
 def get_or_create_series(name: str, teacher_id: int | None) -> int:
-    sb = get_supabase()
-    # Uniqueness is now per (name, teacher_id)
-    q = sb.table("series").select("id").eq("name", name)
-    if teacher_id:
-        q = q.eq("teacher_id", teacher_id)
-    resp = q.maybe_single().execute()
-    if resp.data:
-        return resp.data["id"]
-    data: dict = {"name": name}
-    if teacher_id:
-        data["teacher_id"] = teacher_id
-    resp = sb.table("series").insert(data).select("id").execute()
-    return resp.data[0]["id"]
+    with _pg_conn() as conn:
+        with conn.cursor() as cur:
+            if teacher_id:
+                cur.execute("SELECT id FROM series WHERE name = %s AND teacher_id = %s", (name, teacher_id))
+            else:
+                cur.execute("SELECT id FROM series WHERE name = %s AND teacher_id IS NULL", (name,))
+            row = cur.fetchone()
+            if row:
+                return row[0]
+            if teacher_id:
+                cur.execute("INSERT INTO series (name, teacher_id) VALUES (%s, %s) RETURNING id", (name, teacher_id))
+            else:
+                cur.execute("INSERT INTO series (name) VALUES (%s) RETURNING id", (name,))
+            return cur.fetchone()[0]
 
 
 # ---------------------------------------------------------------------------
