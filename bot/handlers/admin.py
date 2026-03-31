@@ -236,7 +236,11 @@ async def manage_confirm_teacher(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def manage_apply_teacher(update: Update, context: ContextTypes.DEFAULT_TYPE, recording_id: int, teacher_id: int) -> None:
+    rec = db.get_recording_by_display_id(recording_id)
+    old_teacher_id = rec.get("teacher_id") if rec else None
     db.update_recording_teacher(recording_id, teacher_id)
+    if old_teacher_id and old_teacher_id != teacher_id:
+        db.delete_teacher_if_empty(old_teacher_id)
     await update.callback_query.answer("✅ מרצה עודכן")
     await _show_manage_view(update, context, recording_id)
 
