@@ -532,6 +532,8 @@ def delete_series_if_empty(series_id: int | None) -> bool:
         .execute()
     )
     if (resp.count or 0) == 0:
+        # Nullify series_id on soft-deleted rows so FK doesn't block deletion
+        sb.table("recordings").update({"series_id": None, "lesson_number": None}).eq("series_id", series_id).execute()
         sb.table("series").delete().eq("id", series_id).execute()
         return True
     return False
@@ -550,6 +552,10 @@ def delete_teacher_if_empty(teacher_id: int | None) -> bool:
         .execute()
     )
     if (resp.count or 0) == 0:
+        # Nullify teacher_id on soft-deleted rows so FK doesn't block deletion
+        sb.table("recordings").update({"teacher_id": None}).eq("teacher_id", teacher_id).execute()
+        # Delete any series still referencing this teacher (FK would also block deletion)
+        sb.table("series").update({"teacher_id": None}).eq("teacher_id", teacher_id).execute()
         sb.table("teachers").delete().eq("id", teacher_id).execute()
         return True
     return False
