@@ -22,6 +22,10 @@ from ..keyboards import (
 load_dotenv()
 
 ADMIN_CHAT_ID = int(os.environ.get("ADMIN_CHAT_ID", "0"))
+GROUP_CHAT_ID = int(os.environ.get("GROUP_CHAT_ID", "0"))  # channel/group to auto-post new lessons
+
+# A celebration GIF (Giphy CDN — publicly accessible animation)
+UPLOAD_SUCCESS_GIF = "https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif"
 
 # Threshold for "common" teachers
 TEACHER_THRESHOLD = 10
@@ -449,6 +453,29 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data.pop("upload", None)
     context.user_data.pop("awaiting", None)
     await status.edit_text("⬛⬛⬛⬛ ✅ השיעור נשמר בהצלחה!")
+
+    # Celebration GIF
+    try:
+        await msg.reply_animation(UPLOAD_SUCCESS_GIF, caption="השיעור עלה! תודה רבה 🙏")
+    except Exception:
+        pass
+
+    # Auto-post to group/channel
+    if GROUP_CHAT_ID:
+        try:
+            preview = _format_preview(form, filename)
+            bot = update.callback_query.get_bot()
+            await bot.send_audio(
+                GROUP_CHAT_ID,
+                audio=state["file_id"],
+                caption=f"📥 *שיעור חדש בארכיון*\n\n{preview}",
+                parse_mode="Markdown",
+            )
+        except Exception as e:
+            # Non-fatal — don't block the user
+            import logging
+            logging.getLogger(__name__).warning("Failed to post to group: %s", e)
+
     await msg.reply_text("חזרה לתפריט:", reply_markup=back_to_main())
 
 

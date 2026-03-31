@@ -256,7 +256,7 @@ def get_recordings_by_series(series_id: int, page: int = 0) -> list[dict]:
         .select(_recording_select())
         .eq("series_id", series_id)
         .is_("deleted_at", "null")
-        .order("lesson_number", desc=False, nullsfirst=False)
+        .order("date", desc=True)
         .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
         .execute()
     )
