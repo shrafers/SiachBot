@@ -65,16 +65,21 @@ def get_supabase() -> Client:
 # Search
 # ---------------------------------------------------------------------------
 
+def _build_search_filter(q, query: str):
+    """Apply word-split ILIKE conditions on search_text to a Supabase query object."""
+    tokens = [t for t in query.strip().split() if t]
+    for token in tokens:
+        q = q.ilike("search_text", f"%{token}%")
+    return q
+
+
 def search_recordings(query: str, page: int = 0, filter_type: str = "all") -> list[dict]:
-    """
-    Full-text search across title, teacher, series, sub_discipline, tags, studied_figures.
-    filter_type: 'all' | 'series' | 'oneoff'
-    Returns enriched rows with joined names.
-    """
+    """Free-text search across title, teacher, series, and tags."""
+    query = query.strip()
+    if not query:
+        return []
     sb = get_supabase()
     offset = page * PAGE_SIZE
-
-    # Build base query with joins via select
     q = (
         sb.table("recordings")
         .select(
@@ -83,29 +88,30 @@ def search_recordings(query: str, page: int = 0, filter_type: str = "all") -> li
             "teachers(name), series(name), chavurot(name)"
         )
         .is_("deleted_at", "null")
-        .text_search("title", query, config="simple")
         .order("date", desc=True)
         .range(offset, offset + PAGE_SIZE - 1)
     )
-
+    q = _build_search_filter(q, query)
     if filter_type == "series":
         q = q.not_.is_("series_id", "null")
     elif filter_type == "oneoff":
         q = q.eq("is_oneoff", True)
-
     resp = q.execute()
     return _flatten_joins(resp.data or [])
 
 
 def count_search(query: str, filter_type: str = "all") -> int:
     """Return total hit count for pagination."""
+    query = query.strip()
+    if not query:
+        return 0
     sb = get_supabase()
     q = (
         sb.table("recordings")
         .select("id", count="exact", head=True)
         .is_("deleted_at", "null")
-        .text_search("title", query, config="simple")
     )
+    q = _build_search_filter(q, query)
     if filter_type == "series":
         q = q.not_.is_("series_id", "null")
     elif filter_type == "oneoff":
