@@ -2,6 +2,7 @@
 
 import io
 import os
+import pathlib
 from datetime import datetime, date
 
 from dotenv import load_dotenv
@@ -22,10 +23,21 @@ from ..keyboards import (
 load_dotenv()
 
 ADMIN_CHAT_ID = int(os.environ.get("ADMIN_CHAT_ID", "0"))
-GROUP_CHAT_ID = int(os.environ.get("GROUP_CHAT_ID", "0"))  # channel/group to auto-post new lessons
+CHANNEL_ID = os.environ.get("CHANNEL_ID", "")  # numeric ID or @username of channel to auto-post new lessons
 
-# A celebration GIF (Giphy CDN — publicly accessible animation)
-UPLOAD_SUCCESS_GIF = "https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif"
+_THANKS_IMAGE_PATH = pathlib.Path(__file__).parents[3] / "data" / "thanks_image.png"
+
+
+def _thanks_sticker_bytes() -> io.BytesIO:
+    """Convert thanks_image.png → WebP sticker (512×512, transparent background) in memory."""
+    from PIL import Image
+    img = Image.open(_THANKS_IMAGE_PATH).convert("RGBA")
+    img.thumbnail((512, 512), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="WEBP")
+    buf.seek(0)
+    buf.name = "thanks.webp"
+    return buf
 
 # Threshold for "common" teachers
 TEACHER_THRESHOLD = 10
@@ -454,27 +466,27 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data.pop("awaiting", None)
     await status.edit_text("⬛⬛⬛⬛ ✅ השיעור נשמר בהצלחה!")
 
-    # Celebration GIF
+    # Celebration sticker
     try:
-        await msg.reply_animation(UPLOAD_SUCCESS_GIF, caption="השיעור עלה! תודה רבה 🙏")
+        await msg.reply_sticker(_thanks_sticker_bytes())
     except Exception:
         pass
 
-    # Auto-post to group/channel
-    if GROUP_CHAT_ID:
+    # Auto-post to channel
+    if CHANNEL_ID:
         try:
+            channel = int(CHANNEL_ID) if CHANNEL_ID.lstrip("-").isdigit() else CHANNEL_ID
             preview = _format_preview(form, filename)
             bot = update.callback_query.get_bot()
             await bot.send_audio(
-                GROUP_CHAT_ID,
+                channel,
                 audio=state["file_id"],
                 caption=f"📥 *שיעור חדש בארכיון*\n\n{preview}",
                 parse_mode="Markdown",
             )
         except Exception as e:
-            # Non-fatal — don't block the user
             import logging
-            logging.getLogger(__name__).warning("Failed to post to group: %s", e)
+            logging.getLogger(__name__).warning("Failed to post to channel: %s", e)
 
     await msg.reply_text("חזרה לתפריט:", reply_markup=back_to_main())
 
