@@ -469,8 +469,8 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Celebration sticker
     try:
         await msg.reply_sticker(_thanks_sticker_bytes())
-    except Exception:
-        pass
+    except Exception as e:
+        await msg.reply_text(f"⚠️ sticker error: {e}")
 
     # Auto-post to channel
     if CHANNEL_ID:
@@ -484,9 +484,11 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 caption=f"📥 *שיעור חדש בארכיון*\n\n{preview}",
                 parse_mode="Markdown",
             )
+            await msg.reply_text("✅ פורסם בערוץ")
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning("Failed to post to channel: %s", e)
+            await msg.reply_text(f"⚠️ channel error: {e}")
+    else:
+        await msg.reply_text("⚠️ CHANNEL_ID not set")
 
     await msg.reply_text("חזרה לתפריט:", reply_markup=back_to_main())
 
