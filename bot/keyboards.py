@@ -154,66 +154,58 @@ def zmanim_keyboard(zmanim: list[dict], hebrew_year: str) -> InlineKeyboardMarku
 
 def result_card_keyboard(
     rec: dict,
-    page: int,
-    total_pages: int,
-    context_action: str,       # the browse/search action to page within
-    context_id: int | None = None,   # teacher_id / series_id / etc.
-    context_query: str | None = None,
-    context_filter: str | None = None,
-    context_extra: dict | None = None,  # arbitrary extra kwargs for prev/next callbacks
     is_trusted: bool = False,
 ) -> InlineKeyboardMarkup:
+    """Minimal card keyboard: download + manage (trusted users only)."""
     rows = []
 
-    # Row 1: primary action — download
+    # Download button
     rows.append([
         InlineKeyboardButton(
             "⬇ הורדה", callback_data=encode_cb("dl", id=rec["id"])),
     ])
 
-    # Row 2: Prev / Next navigation
-    if rec.get("series_name") and rec.get("series_id"):
-        # Series navigation — show destination page number
-        nav_row = []
-        if page > 0:
-            nav_row.append(InlineKeyboardButton(
-                f"◀ עמ' {page}",
-                callback_data=encode_cb(
-                    "series_recs", id=rec["series_id"], p=page - 1),
-            ))
-        if page < total_pages - 1:
-            nav_row.append(InlineKeyboardButton(
-                f"עמ' {page + 2} ▶",
-                callback_data=encode_cb(
-                    "series_recs", id=rec["series_id"], p=page + 1),
-            ))
-        if nav_row:
-            rows.append(nav_row)
-    else:
-        # Generic pagination for search/browse context
-        nav_row = []
-        if context_action and page > 0:
-            cb = _build_page_cb(context_action, page - 1,
-                                context_id, context_query, context_filter, **(context_extra or {}))
-            nav_row.append(InlineKeyboardButton("◀ הקודם", callback_data=cb))
-        if context_action and page < total_pages - 1:
-            cb = _build_page_cb(context_action, page + 1,
-                                context_id, context_query, context_filter, **(context_extra or {}))
-            nav_row.append(InlineKeyboardButton("הבא ▶", callback_data=cb))
-        if nav_row:
-            rows.append(nav_row)
-
-    # Row 4: back to parent browse context
-    back = _back_cb(context_action, context_id, context_extra)
-    if back:
-        rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=back)])
-
-    # Row 5: manage button (trusted users only)
+    # Manage button (trusted users only)
     if is_trusted and rec.get("id"):
         rows.append([InlineKeyboardButton(
             f"⚙️ נהל שיעור #{rec['id']}",
             callback_data=encode_cb("manage", id=rec["id"]),
         )])
+
+    return InlineKeyboardMarkup(rows)
+
+
+def page_footer_keyboard(
+    page: int,
+    total_pages: int,
+    context_action: str,
+    context_id: int | None = None,
+    context_query: str | None = None,
+    context_filter: str | None = None,
+    context_extra: dict | None = None,
+) -> InlineKeyboardMarkup:
+    """Build pagination footer keyboard with prev/next and back button."""
+    rows = []
+
+    # Navigation row: prev | counter | next
+    nav_row = []
+    if page > 0:
+        cb = _build_page_cb(context_action, page - 1,
+                            context_id, context_query, context_filter, **(context_extra or {}))
+        nav_row.append(InlineKeyboardButton("◀ הקודם", callback_data=cb))
+    nav_row.append(InlineKeyboardButton(
+        f"{page + 1}/{total_pages}", callback_data="noop"))
+    if page < total_pages - 1:
+        cb = _build_page_cb(context_action, page + 1,
+                            context_id, context_query, context_filter, **(context_extra or {}))
+        nav_row.append(InlineKeyboardButton("הבא ▶", callback_data=cb))
+    if nav_row:
+        rows.append(nav_row)
+
+    # Back button
+    back = _back_cb(context_action, context_id, context_extra)
+    if back:
+        rows.append([InlineKeyboardButton("🔙 חזרה", callback_data=back)])
 
     return InlineKeyboardMarkup(rows)
 

@@ -4,7 +4,7 @@ from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from ..utils import format_result_card, encode_cb
-from ..keyboards import result_card_keyboard
+from ..keyboards import result_card_keyboard, page_footer_keyboard
 from . import admin as admin_handlers
 
 
@@ -38,19 +38,21 @@ async def send_results_page(
     for i, rec in enumerate(results):
         card_text = format_result_card(rec)
 
-        keyboard = result_card_keyboard(
-            rec=rec,
-            page=page,
-            total_pages=total_pages,
-            context_action=context_action,
-            context_id=context_id,
-            context_query=context_query,
-            context_filter=context_filter,
-            context_extra=context_extra,
-            is_trusted=trusted,
-        )
+        keyboard = result_card_keyboard(rec=rec, is_trusted=trusted)
 
         await msg.reply_text(card_text, parse_mode="Markdown", reply_markup=keyboard)
+
+    # Send pagination footer
+    footer_keyboard = page_footer_keyboard(
+        page=page,
+        total_pages=total_pages,
+        context_action=context_action,
+        context_id=context_id,
+        context_query=context_query,
+        context_filter=context_filter,
+        context_extra=context_extra,
+    )
+    await msg.reply_text(f"עמוד {page + 1}/{total_pages}", reply_markup=footer_keyboard)
 
     # Send filter keyboard as a separate trailing message if provided
     if filter_keyboard:
