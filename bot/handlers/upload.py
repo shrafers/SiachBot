@@ -23,9 +23,10 @@ from ..keyboards import (
 load_dotenv()
 
 ADMIN_CHAT_ID = int(os.environ.get("ADMIN_CHAT_ID", "0"))
-CHANNEL_ID = os.environ.get("CHANNEL_ID", "")  # numeric ID or @username of channel to auto-post new lessons
+def _channel_id():
+    return os.environ.get("CHANNEL_ID", "")
 
-_THANKS_IMAGE_PATH = pathlib.Path(__file__).parents[3] / "data" / "thanks_image.png"
+_THANKS_IMAGE_PATH = pathlib.Path(__file__).parents[2] / "data" / "thanks_image.png"
 
 
 def _thanks_sticker_bytes() -> io.BytesIO:
@@ -473,9 +474,10 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await msg.reply_text(f"⚠️ sticker error: {e}")
 
     # Auto-post to channel
-    if CHANNEL_ID:
+    channel_id = _channel_id()
+    if channel_id:
         try:
-            channel = int(CHANNEL_ID) if CHANNEL_ID.lstrip("-").isdigit() else CHANNEL_ID
+            channel = int(channel_id) if channel_id.lstrip("-").isdigit() else channel_id
             preview = _format_preview(form, filename)
             bot = update.callback_query.get_bot()
             await bot.send_audio(
@@ -488,7 +490,7 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except Exception as e:
             await msg.reply_text(f"⚠️ channel error: {e}")
     else:
-        await msg.reply_text("⚠️ CHANNEL_ID not set")
+        await msg.reply_text(f"⚠️ CHANNEL_ID not set (env: {list(k for k in os.environ if 'CHANNEL' in k)})")
 
     await msg.reply_text("חזרה לתפריט:", reply_markup=back_to_main())
 
