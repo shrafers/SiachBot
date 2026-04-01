@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import time as dtime
 
 from dotenv import load_dotenv
 from telegram import Update
@@ -23,6 +24,7 @@ from .handlers.upload import (
 from .handlers.admin import (
     review_command, manage_command, trust_command,
     handle_manage_id_text, handle_manage_title_text,
+    stats_command,
 )
 from .handlers.callbacks import handle_callback
 
@@ -97,6 +99,7 @@ def main() -> None:
     app.add_handler(CommandHandler("review", review_command))
     app.add_handler(CommandHandler("manage", manage_command))
     app.add_handler(CommandHandler("trust", trust_command))
+    app.add_handler(CommandHandler("stats", stats_command))
 
     # Audio files
     app.add_handler(MessageHandler(AUDIO_FILTER, handle_audio))
@@ -106,6 +109,20 @@ def main() -> None:
 
     # Inline button callbacks
     app.add_handler(CallbackQueryHandler(handle_callback))
+
+    # Monthly cost report — runs on the 1st of each month at 08:00 UTC
+    async def _send_cost_report(context) -> None:
+        from cost_report import run_cost_report
+        try:
+            run_cost_report()
+        except Exception as exc:
+            logger.error("Cost report failed: %s", exc)
+
+    app.job_queue.run_monthly(
+        _send_cost_report,
+        when=dtime(8, 0),
+        day=1,
+    )
 
     logger.info("Bot started — polling...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
