@@ -85,7 +85,7 @@ def fetch_r2_usage(account_id: str, start: date, end: date) -> dict:
         "endDate": end.isoformat(),
     }
     resp = requests.post(
-        "https://graphql.cloudflare.com/",
+        "https://api.cloudflare.com/client/v4/graphql",
         headers=_cf_headers(),
         json={"query": query, "variables": variables},
         timeout=30,
@@ -93,10 +93,10 @@ def fetch_r2_usage(account_id: str, start: date, end: date) -> dict:
     resp.raise_for_status()
     data = resp.json()
 
-    if "errors" in data:
+    if data.get("errors"):
         raise RuntimeError(f"Cloudflare GraphQL errors: {data['errors']}")
 
-    account_data = data["viewer"]["accounts"][0]
+    account_data = data["data"]["viewer"]["accounts"][0]
 
     # Storage — take the max snapshot across all days
     storage_bytes = 0
@@ -107,8 +107,14 @@ def fetch_r2_usage(account_id: str, start: date, end: date) -> dict:
 
     # Operations — split by actionType
     # Class A: WriteObject, DeleteObject, ListBuckets, ListObjects, CreateBucket, DeleteBucket
-    CLASS_A_ACTIONS = {"WriteObject", "DeleteObject", "ListBuckets", "ListObjects",
-                       "CreateBucket", "DeleteBucket", "PutBucketCors", "PutBucketLifecycle"}
+    # https://developers.cloudflare.com/r2/pricing/
+    CLASS_A_ACTIONS = {
+        "CreateBucket", "DeleteBucket", "ListBuckets", "ListObjects",
+        "PutObject", "CopyObject", "DeleteObject",
+        "CreateMultipartUpload", "CompleteMultipartUpload",
+        "ListMultipartUploads", "UploadPart", "UploadPartCopy",
+        "PutBucketCors", "PutBucketLifecycle",
+    }
     class_a_ops = 0
     class_b_ops = 0
     for g in account_data.get("opsGroups", []):
