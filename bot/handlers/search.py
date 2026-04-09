@@ -39,6 +39,13 @@ async def _do_search(
     total = db.count_search(query, filter_type=filter_type)
     tp = total_pages(total, db.PAGE_SIZE)
 
+    if page == 0:
+        try:
+            user = (update.message or update.callback_query).from_user
+            db.log_event(user.id, "search", {"query": query, "results_count": total})
+        except Exception:
+            pass
+
     # Save state for pagination callbacks
     context.user_data["search"] = {
         "query": query,

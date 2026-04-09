@@ -288,6 +288,11 @@ async def _handle_download(
         await update.callback_query.message.reply_text("שיעור לא נמצא.")
         return
 
+    try:
+        db.log_event(update.callback_query.from_user.id, "download", {"recording_id": recording_id})
+    except Exception:
+        pass
+
     if rec.get("audio_r2_path"):
         file_size = rec.get("file_size_bytes") or 0
         ext = os.path.splitext(rec.get("filename") or ".m4a")[1] or ".m4a"

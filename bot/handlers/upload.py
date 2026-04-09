@@ -448,7 +448,14 @@ async def confirm_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if isinstance(form.get("lesson_number"), int):
             row["lesson_number"] = form["lesson_number"]
 
-        db.insert_new_recording(row)
+        inserted = db.insert_new_recording(row)
+        try:
+            db.log_event(update.callback_query.from_user.id, "upload", {
+                "recording_id": (inserted or {}).get("id"),
+                "teacher": form.get("teacher"),
+            })
+        except Exception:
+            pass
     except Exception as e:
         await status.edit_text(f"❌ שגיאה בשמירה בבסיס הנתונים:\n{e}")
         return

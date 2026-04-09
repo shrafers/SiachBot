@@ -633,3 +633,152 @@ def _flatten_joins(rows: list[dict]) -> list[dict]:
             r[f"{col}_name"] = nested["name"] if isinstance(nested, dict) else None
         flat.append(r)
     return flat
+
+
+# ---------------------------------------------------------------------------
+# User tracking + event log
+# ---------------------------------------------------------------------------
+
+def upsert_user(user_id: int, username: str | None) -> None:
+    """Register or refresh a user on /start. Sets first_seen on insert, updates last_seen always."""
+    from datetime import datetime, timezone
+    sb = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+    sb.table("bot_users").upsert(
+        {"user_id": user_id, "username": username, "last_seen": now},
+        on_conflict="user_id",
+    ).execute()
+
+
+def log_event(user_id: int, event_type: str, event_data: dict | None = None) -> None:
+    """Append one row to user_events. Fire-and-forget — never raises."""
+    try:
+        get_supabase().table("user_events").insert({
+            "user_id": user_id,
+            "event_type": event_type,
+            "event_data": event_data or {},
+        }).execute()
+    except Exception:
+        pass
+
+
+def get_stats() -> dict:
+    """Aggregate statistics for the /stats admin command."""
+    from datetime import datetime, timezone, timedelta
+    sb = get_supabase()
+    now = datetime.now(timezone.utc)
+    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    start_of_week = (now - timedelta(days=now.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    epoch = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+    def _count(table: str, filters: list) -> int:
+        q = sb.table(table).select("id", count="exact", head=True)
+        for method, *args in filters:
+            q = getattr(q, method)(*args)
+        return q.execute().count or 0
+
+    def _count_events(event_type: str, since: datetime) -> int:
+        return (
+            sb.table("user_events")
+            .select("id", count="exact", head=True)
+            .eq("event_type", event_type)
+            .gte("created_at", since.isoformat())
+            .execute()
+            .count or 0
+        )
+
+    # Users
+    total_users = (
+        sb.table("bot_users").select("user_id", count="exact", head=True).execute().count or 0
+    )
+    new_this_month = (
+        sb.table("bot_users")
+        .select("user_id", count="exact", head=True)
+        .gte("first_seen", start_of_month.isoformat())
+        .execute()
+        .count or 0
+    )
+    new_this_week = (
+        sb.table("bot_users")
+        .select("user_id", count="exact", head=True)
+        .gte("first_seen", start_of_week.isoformat())
+        .execute()
+        .count or 0
+    )
+
+    # Archive
+    total_recordings = (
+        sb.table("recordings")
+        .select("id", count="exact", head=True)
+        .is_("deleted_at", "null")
+        .execute()
+        .count or 0
+    )
+    downloaded_to_r2 = (
+        sb.table("recordings")
+        .select("id", count="exact", head=True)
+        .is_("deleted_at", "null")
+        .eq("audio_downloaded", True)
+        .execute()
+        .count or 0
+    )
+    pending_review = (
+        sb.table("recordings")
+        .select("id", count="exact", head=True)
+        .is_("deleted_at", "null")
+        .eq("needs_human_review", True)
+        .execute()
+        .count or 0
+    )
+
+    # Downloads
+    dl_total = _count_events("download", epoch)
+    dl_today = _count_events("download", start_of_today)
+    dl_week = _count_events("download", start_of_week)
+    dl_month = _count_events("download", start_of_month)
+
+    # Searches
+    search_total = _count_events("search", epoch)
+    search_month = _count_events("search", start_of_month)
+
+    # Uploads
+    upload_total = _count_events("upload", epoch)
+    upload_month = _count_events("upload", start_of_month)
+
+    # Top downloads this month (via RPC)
+    top_downloads = (
+        sb.rpc("top_downloaded_recordings", {
+            "p_since": start_of_month.isoformat(),
+            "p_limit": 5,
+        }).execute().data or []
+    )
+
+    # Top search queries this month (via RPC)
+    top_searches = (
+        sb.rpc("top_search_queries", {
+            "p_since": start_of_month.isoformat(),
+            "p_limit": 5,
+        }).execute().data or []
+    )
+
+    return {
+        "total_users": total_users,
+        "new_this_month": new_this_month,
+        "new_this_week": new_this_week,
+        "total_recordings": total_recordings,
+        "downloaded_to_r2": downloaded_to_r2,
+        "pending_review": pending_review,
+        "dl_total": dl_total,
+        "dl_today": dl_today,
+        "dl_week": dl_week,
+        "dl_month": dl_month,
+        "search_total": search_total,
+        "search_month": search_month,
+        "upload_total": upload_total,
+        "upload_month": upload_month,
+        "top_downloads": top_downloads,
+        "top_searches": top_searches,
+    }

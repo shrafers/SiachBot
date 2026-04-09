@@ -364,3 +364,83 @@ def _esc(text: str) -> str:
     for ch in r"_*`[":
         text = text.replace(ch, f"\\{ch}")
     return text
+
+
+def _esc_v2(text: str) -> str:
+    """Escape all MarkdownV2 special characters."""
+    for ch in r"\_*[]()~`>#+-=|{}.!":
+        text = text.replace(ch, f"\\{ch}")
+    return text
+
+
+# ---------------------------------------------------------------------------
+# /stats — admin statistics dashboard
+# ---------------------------------------------------------------------------
+
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not is_admin(_get_user_id(update)):
+        await update.message.reply_text("אין לך הרשאה לפקודה זו.")
+        return
+
+    await update.message.reply_text("טוען נתונים... ⏳")
+
+    try:
+        s = db.get_stats()
+    except Exception as e:
+        await update.message.reply_text(f"שגיאה בטעינת הנתונים:\n{e}")
+        return
+
+    # Top downloaded recordings this month
+    if s["top_downloads"]:
+        dl_lines = []
+        for i, row in enumerate(s["top_downloads"], 1):
+            title = row.get("title") or f"#{row.get('recording_id')}"
+            teacher = row.get("teacher_name") or ""
+            count = row.get("dl_count") or 0
+            suffix = f" — {teacher}" if teacher else ""
+            dl_lines.append(f"{i}\\. {_esc_v2(title)}{_esc_v2(suffix)} \\({count}\\)")
+        top_dl_block = "\n".join(dl_lines)
+    else:
+        top_dl_block = "_אין הורדות החודש_"
+
+    # Top search queries this month
+    if s["top_searches"]:
+        srch_lines = [
+            f"{i}\\. {_esc_v2(row['query'])} \\({row['search_count']}\\)"
+            for i, row in enumerate(s["top_searches"], 1)
+        ]
+        top_srch_block = "\n".join(srch_lines)
+    else:
+        top_srch_block = "_אין חיפושים החודש_"
+
+    text = (
+        "📊 *סטטיסטיקות הבוט*\n"
+        "\n"
+        "👥 *משתמשים*\n"
+        f"סה\"כ: {s['total_users']}\n"
+        f"חדשים החודש: {s['new_this_month']}\n"
+        f"חדשים השבוע: {s['new_this_week']}\n"
+        "\n"
+        "📚 *ארכיון*\n"
+        f"שיעורים סה\"כ: {s['total_recordings']}\n"
+        f"עם קובץ ב\\-R2: {s['downloaded_to_r2']}\n"
+        f"ממתינים לבדיקה: {s['pending_review']}\n"
+        "\n"
+        "⬇️ *הורדות*\n"
+        f"סה\"כ: {s['dl_total']}  |  החודש: {s['dl_month']}\n"
+        f"השבוע: {s['dl_week']}  |  היום: {s['dl_today']}\n"
+        "\n"
+        "🔍 *חיפושים*\n"
+        f"סה\"כ: {s['search_total']}  |  החודש: {s['search_month']}\n"
+        "\n"
+        "📤 *העלאות*\n"
+        f"סה\"כ: {s['upload_total']}  |  החודש: {s['upload_month']}\n"
+        "\n"
+        "🏆 *הורדות מובילות החודש*\n"
+        f"{top_dl_block}\n"
+        "\n"
+        "🔎 *חיפושים נפוצים החודש*\n"
+        f"{top_srch_block}"
+    )
+
+    await update.message.reply_text(text, parse_mode="MarkdownV2")

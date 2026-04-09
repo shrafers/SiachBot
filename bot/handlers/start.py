@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 
 from ..keyboards import main_menu_keyboard, quick_access_keyboard
 from . import admin as admin_handlers
+from .. import db
 
 WELCOME = (
     "ברוך הבא לארכיון שיעורי הישיבה! 🎓\n"
@@ -47,7 +48,13 @@ def _build_help_text() -> str:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.message.from_user.id
+    user = update.message.from_user
+    user_id = user.id
+    try:
+        db.upsert_user(user_id, user.username)
+        db.log_event(user_id, "start")
+    except Exception:
+        pass
     trusted = admin_handlers.is_trusted(user_id)
     # Send welcome with persistent keyboard to install/replace the bottom bar
     await update.message.reply_text(WELCOME, reply_markup=quick_access_keyboard(trusted=trusted))
