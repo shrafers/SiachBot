@@ -28,7 +28,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Main menu
     # ------------------------------------------------------------------
     if action == "main_menu":
-        await query.message.reply_text("תפריט ראשי:", reply_markup=main_menu_keyboard())
+        is_admin = admin_handlers.is_admin(query.from_user.id)
+        await query.message.reply_text("תפריט ראשי:", reply_markup=main_menu_keyboard(is_admin=is_admin))
+
+    elif action == "admin_stats":
+        if not admin_handlers.is_admin(query.from_user.id):
+            await query.message.reply_text("אין לך הרשאה.")
+            return
+        await admin_handlers.stats_command(update, context)
 
     elif action == "search_prompt":
         context.user_data["awaiting"] = "search_query"

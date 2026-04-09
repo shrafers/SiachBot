@@ -56,10 +56,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception:
         pass
     trusted = admin_handlers.is_trusted(user_id)
+    admin = admin_handlers.is_admin(user_id)
     # Send welcome with persistent keyboard to install/replace the bottom bar
     await update.message.reply_text(WELCOME, reply_markup=quick_access_keyboard(trusted=trusted))
     # Then show the inline main menu
-    await update.message.reply_text("בחר פעולה:", reply_markup=main_menu_keyboard())
+    await update.message.reply_text("בחר פעולה:", reply_markup=main_menu_keyboard(is_admin=admin))
 
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

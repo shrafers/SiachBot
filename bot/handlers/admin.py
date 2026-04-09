@@ -45,7 +45,7 @@ def _get_user_id(update: Update) -> int:
 
 async def review_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_admin(_get_user_id(update)):
-        await update.message.reply_text("אין לך הרשאה לפקודה זו.")
+        await update.effective_message.reply_text("אין לך הרשאה לפקודה זו.")
         return
     context.user_data["review_skipped"] = []
     await _show_next_review(update, context)
@@ -92,7 +92,7 @@ async def review_skip(update: Update, context: ContextTypes.DEFAULT_TYPE, record
 
 async def manage_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_trusted(_get_user_id(update)):
-        await update.message.reply_text("אין לך הרשאה לפקודה זו.")
+        await update.effective_message.reply_text("אין לך הרשאה לפקודה זו.")
         return
 
     args = context.args
@@ -101,14 +101,14 @@ async def manage_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await _show_manage_view(update, context, recording_id)
     else:
         context.user_data["awaiting"] = "manage_id"
-        await update.message.reply_text("שלח מספר שיעור (לדוגמה: 247 או #247):")
+        await update.effective_message.reply_text("שלח מספר שיעור (לדוגמה: 247 או #247):")
 
 
 async def handle_manage_id_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Called from text router when awaiting == 'manage_id'."""
     text = update.message.text.strip().lstrip("#")
     if not text.isdigit():
-        await update.message.reply_text("נא לשלוח מספר שיעור בלבד.")
+        await update.effective_message.reply_text("נא לשלוח מספר שיעור בלבד.")
         return
     context.user_data.pop("awaiting", None)
     await _show_manage_view(update, context, int(text))
@@ -282,7 +282,7 @@ async def handle_manage_title_text(update: Update, context: ContextTypes.DEFAULT
         return
     new_title = update.message.text.strip()
     db.update_recording_title(recording_id, new_title)
-    await update.message.reply_text(f"✅ כותרת עודכנה לשיעור #{recording_id}.")
+    await update.effective_message.reply_text(f"✅ כותרת עודכנה לשיעור #{recording_id}.")
     await _show_manage_view(update, context, recording_id)
 
 
@@ -319,12 +319,12 @@ async def manage_apply_delete(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def trust_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_admin(_get_user_id(update)):
-        await update.message.reply_text("אין לך הרשאה לפקודה זו.")
+        await update.effective_message.reply_text("אין לך הרשאה לפקודה זו.")
         return
 
     args = context.args
     if not args:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "שימוש:\n"
             "/trust list — רשימת משתמשים מורשים\n"
             "/trust add <user_id> — הוסף משתמש\n"
@@ -337,23 +337,23 @@ async def trust_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if subcmd == "list":
         users = db.list_trusted_users()
         if not users:
-            await update.message.reply_text("אין משתמשים מורשים כרגע.")
+            await update.effective_message.reply_text("אין משתמשים מורשים כרגע.")
             return
         lines = [f"• `{u['telegram_user_id']}` (נוסף: {str(u['added_at'])[:10]})" for u in users]
-        await update.message.reply_text("משתמשים מורשים:\n" + "\n".join(lines), parse_mode="Markdown")
+        await update.effective_message.reply_text("משתמשים מורשים:\n" + "\n".join(lines), parse_mode="Markdown")
 
     elif subcmd == "add" and len(args) >= 2 and args[1].isdigit():
         uid = int(args[1])
         db.add_trusted_user(uid, added_by=_get_user_id(update))
-        await update.message.reply_text(f"✅ משתמש `{uid}` נוסף כמורשה.", parse_mode="Markdown")
+        await update.effective_message.reply_text(f"✅ משתמש `{uid}` נוסף כמורשה.", parse_mode="Markdown")
 
     elif subcmd == "remove" and len(args) >= 2 and args[1].isdigit():
         uid = int(args[1])
         db.remove_trusted_user(uid)
-        await update.message.reply_text(f"✅ משתמש `{uid}` הוסר.", parse_mode="Markdown")
+        await update.effective_message.reply_text(f"✅ משתמש `{uid}` הוסר.", parse_mode="Markdown")
 
     else:
-        await update.message.reply_text("פקודה לא תקינה. השתמש ב: /trust list | add <id> | remove <id>")
+        await update.effective_message.reply_text("פקודה לא תקינה. השתמש ב: /trust list | add <id> | remove <id>")
 
 
 # ---------------------------------------------------------------------------
@@ -379,15 +379,16 @@ def _esc_v2(text: str) -> str:
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not is_admin(_get_user_id(update)):
-        await update.message.reply_text("אין לך הרשאה לפקודה זו.")
+        await update.effective_message.reply_text("אין לך הרשאה לפקודה זו.")
         return
 
-    await update.message.reply_text("טוען נתונים... ⏳")
+    await update.effective_message.reply_text("טוען נתונים... ⏳")
 
     try:
-        s = db.get_stats()
+        import asyncio
+        s = await asyncio.to_thread(db.get_stats)
     except Exception as e:
-        await update.message.reply_text(f"שגיאה בטעינת הנתונים:\n{e}")
+        await update.effective_message.reply_text(f"שגיאה בטעינת הנתונים:\n{e}")
         return
 
     # Top downloaded recordings this month
@@ -443,4 +444,4 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"{top_srch_block}"
     )
 
-    await update.message.reply_text(text, parse_mode="MarkdownV2")
+    await update.effective_message.reply_text(text, parse_mode="MarkdownV2")

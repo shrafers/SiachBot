@@ -26,8 +26,8 @@ def quick_access_keyboard(trusted: bool = False) -> ReplyKeyboardMarkup:
 # Main menus
 # ---------------------------------------------------------------------------
 
-def main_menu_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
+def main_menu_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
+    rows = [
         [
             InlineKeyboardButton(
                 "🔍 חיפוש", callback_data=encode_cb("search_prompt")),
@@ -50,7 +50,13 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 "🎙 הקלטת שיעור", callback_data=encode_cb("record_prompt")),
         ],
-    ])
+    ]
+    if is_admin:
+        rows.append([
+            InlineKeyboardButton(
+                "📊 סטטיסטיקות", callback_data=encode_cb("admin_stats")),
+        ])
+    return InlineKeyboardMarkup(rows)
 
 
 def teacher_series_keyboard(series_list: list[dict], teacher_id: int, standalone_count: int = 0) -> InlineKeyboardMarkup:
