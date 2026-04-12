@@ -9,13 +9,13 @@ The group it was built for shares audio files (m4a/mp3) informally — inconsist
 ## What it does
 
 - **Scrapes** audio message metadata from a Telegram group (no manual work)
-- **Tags** every recording with Claude AI — extracting teacher, subject area, series, lesson number, studied figures, and free-form tags
+- **Tags** every recording with Claude AI — extracting teacher, series, lesson number, studied figures, and free-form tags
 - **Stores** structured metadata in Supabase (Postgres) and audio files in Cloudflare R2
-- **Serves** a Hebrew-language Telegram bot with browse, search, and upload flows
+- **Serves** a Hebrew-language Telegram bot with browse, search, upload, and admin flows
 
 ---
 
-## Tech Stack
+## Tech stack
 
 | Layer | Technology |
 |---|---|
@@ -25,55 +25,87 @@ The group it was built for shares audio files (m4a/mp3) informally — inconsist
 | Database | Supabase (Postgres) |
 | File storage | Cloudflare R2 (S3-compatible) |
 | AI tagging | Anthropic Claude API (Batches API) |
-| Hebrew date conversion | pyluach |
+| Hebrew dates | pyluach |
 | Hosting | Railway.app |
 
 ---
 
-## Pipeline stages
+## Project structure
 
 ```
-Stage 1 — Scrape metadata        ✅
-Stage 2 — Analyze raw data       ✅
-Stage 3 — Tag with Claude AI     ✅
-Stage 4 — Design DB + import     ✅
-Stage 5 — Download audio to R2   ✅
-Stage 6a — Bot core              ✅
-Stage 6b — Bot smart features    🔄
-Stage 7 — Ongoing ingestion      ⬜
+bot/                        # The running Telegram bot (Python package)
+  __main__.py               # Entry point — run with: python -m bot
+  db.py                     # All database queries (single access point)
+  r2.py                     # Cloudflare R2 upload/download
+  telethon_client.py        # MTProto client for large file downloads
+  cost_report.py            # Monthly cost email (called by job queue)
+  keyboards.py              # All inline/reply keyboard builders
+  utils.py                  # Formatting helpers, callback encode/decode
+  assets/
+    thanks_image.png        # Sticker sent after successful upload
+  handlers/
+    start.py                # /start, /help
+    search.py               # /search flow
+    browse.py               # Browse by teacher / series / year / chavura
+    results.py              # Paginated result card rendering
+    upload.py               # Audio upload form
+    admin.py                # /review, /manage, /trust, /stats
+    callbacks.py            # Central inline button router
+
+scripts/                    # One-time and pipeline scripts (run from project root)
+  scrape.py                 # Stage 1 — scrape message metadata from Telegram
+  tag_recordings.py         # Stage 3 — tag with Claude Batches API
+  import_to_supabase.py     # Stage 4 — import tagged JSON into DB
+  download_to_r2.py         # Stage 5 — download audio from Telegram to R2
+  add_hebrew_dates.py       # Add Hebrew date fields to tagged JSON
+  backfill_hebrew_year.py   # One-time DB backfill
+  backfill_file_sizes.py    # One-time DB backfill
+  apply_series_assignments.py  # Apply manual series CSV to DB
+  build_review_html.py      # Generate HTML review tool
+  analyze_data.py           # Statistics from tagged JSON
+  export_lists.py           # Export lists to txt
+  list_groups.py            # Find Telegram group ID
+  run_sql.py                # Execute SQL from stdin
+
+data/                       # Raw and processed JSON data files
+  all_recordings.json       # Combined metadata from scrape
+  tagged_recordings.json    # AI-tagged output (source of truth before DB)
+  recordings/               # One JSON per message from Stage 1
+
+migrations/                 # Supabase SQL migrations (applied in order)
+
+sql/                        # Reference SQL — schema definition and RPC functions
+  schema.sql
+  supabase_rpc.sql
+  add_chavurot_subject.sql
+
+prompts/
+  tag_recordings.txt        # System prompt used by tag_recordings.py
+
+tests/                      # Test scripts
 ```
 
-### Stage 1 — Scrape
-`scrape.py` iterates all messages in the group using Telethon. For each audio message it collects:
-- File metadata (name, size, duration)
-- The message caption
-- The text message immediately before and after (same sender, within 3 minutes) — context the teacher may have sent separately
-- Hebrew and Gregorian dates
+---
 
-Output: one JSON file per message + a combined `all_recordings.json`.
+## Pipeline (already run — for reference)
 
-### Stage 3 — AI Tagging
-`tag_recordings.py` sends every recording through the Anthropic Batches API (50% cost reduction vs real-time). Each request includes the filename, caption, and surrounding message context.
+```
+Stage 1 — Scrape metadata        ✅  scripts/scrape.py
+Stage 2 — Analyze raw data       ✅  scripts/analyze_data.py
+Stage 3 — Tag with Claude AI     ✅  scripts/tag_recordings.py
+Stage 4 — Import to DB           ✅  scripts/import_to_supabase.py
+Stage 5 — Download audio to R2   ✅  scripts/download_to_r2.py
+Stage 6 — Bot                    ✅  bot/
+Stage 7 — Ongoing ingestion      ⬜  not yet built
+```
 
-Claude extracts:
-- Teacher name
-- Subject area and sub-discipline
-- Series name and lesson number
-- Studied figures (e.g. a shiur *about* Rav Kook is tagged separately from the teacher)
-- Free-form tags
-- Confidence level (`high` / `medium` / `low`)
+**Stage 1 — Scrape:** Telethon iterates all group messages. For each audio it captures the filename, size, duration, caption, and the text messages immediately before/after (same sender, within 3 min). Output: `data/recordings/<id>.json` + `data/all_recordings.json`.
 
-### Stage 4 — Database
-`schema.sql` + `import_to_supabase.py` build a normalized Postgres schema with reference tables for teachers, series, subject areas, sub-disciplines, and studied figures.
+**Stage 3 — AI Tagging:** Each recording is sent to the Anthropic Batches API (50% cheaper than real-time). Claude extracts teacher, series, lesson number, studied figures, tags, and a confidence level (`high/medium/low`). Prompt is in `prompts/tag_recordings.txt`.
 
-Key design decisions:
-- Many-to-many for tags and studied figures
-- Deduplication by `(date, teacher_id, duration ±60s)`
-- `needs_human_review` flag for low-confidence or ambiguous records
-- Postgres full-text search index on titles
+**Stage 4 — DB import:** `scripts/import_to_supabase.py` reads `data/tagged_recordings.json`, resolves entity IDs, and inserts into all tables. Deduplication key: `(date, teacher_id, duration_seconds ±60s)`.
 
-### Stage 5 — Audio download
-`download_to_r2.py` downloads audio files from Telegram via Telethon and uploads them to Cloudflare R2 at `audio/{year}/{message_id}.{ext}`. Runs in batches of 20, logs failures without crashing the full run.
+**Stage 5 — Audio:** Downloads via Telethon, uploads to R2 at `audio/{year}/{message_id}.{ext}`, updates `audio_r2_path` and `audio_downloaded` in DB.
 
 ---
 
@@ -82,69 +114,45 @@ Key design decisions:
 The bot is fully in Hebrew and serves ~158 yeshiva members.
 
 ### Browse
-- By teacher → subject area → sub-discipline → recordings
-- By subject area → sub-disciplines → recordings
-- By series → recordings ordered by lesson number
+- By teacher → teacher's series → recordings
+- By series → all series → recordings ordered by lesson number
+- By year (zman) → semester → recordings
+- By chavura → recordings
 - Recently added (last 10)
 
 ### Search
-Free-text search across title, teacher name, series name, sub-discipline, tags, and studied figures — backed by a Postgres RPC with ranked results.
+Free-text search across title, teacher name, series name, tags, and studied figures — backed by a Postgres RPC with ranked results (date DESC). Filter buttons: all | series only | standalone.
 
 ### Result card
 ```
 📖 Title
 👤 Teacher  |  📚 Series — Lesson N  |  📅 Date
 🏷 tag1, tag2
-⏱ Duration
+⏱ Duration  #id
 ```
-With inline buttons: Download | More like this | ◀ Prev  Next ▶
+Inline buttons: Download | More like this | ◀ Prev  Next ▶
 
 ### Download
-- If the file is in R2 → fetches and sends bytes directly
-- Otherwise → sends the original Telegram link as fallback
+- If in R2 and ≤20MB → fetches bytes, sends directly
+- If in R2 and >20MB → sends a presigned URL (1hr)
+- If not in R2 → sends the original Telegram link as fallback
 
 ### Upload flow
-Step-by-step guided form for community members to contribute new recordings:
-1. Teacher (from existing list or add new)
-2. Subject area
-3. Sub-discipline
-4. Title (free text)
-5. Series (existing / standalone / new)
-6. Lesson number (optional)
-7. Notes (optional)
-8. Preview → confirm / edit / cancel
+Community members contribute recordings via a guided form:
+1. Teacher (from list or add new)
+2. Title (free text, mandatory)
+3. Series (existing / standalone / new, optional)
+4. Lesson number (optional, auto-skipped if no series)
+5. Notes (optional)
+6. Preview → confirm / edit / cancel
 
-Uploaded files go to R2 and are flagged `needs_human_review = true`. Admin is notified automatically.
+Forwarded files from the original group are checked against the DB by `message_id` — if already archived, the existing record is shown instead of re-uploading. On confirm: file goes to R2, record inserted with `needs_human_review = true`, admin notified.
 
 ### Admin commands
-- `/review` — work through the review queue one record at a time
-- `/manage` — edit any record by ID
-- `/stats` — usage statistics
-- `/trust` — grant trusted-user status
-
----
-
-## Project structure
-
-```
-scrape.py               # Stage 1 — metadata scraping
-analyze_data.py         # Stage 2 — data exploration
-tag_recordings.py       # Stage 3 — Claude AI tagging
-import_to_supabase.py   # Stage 4 — DB import
-download_to_r2.py       # Stage 5 — audio download pipeline
-schema.sql              # Postgres schema
-bot/
-  __main__.py           # Entry point
-  db.py                 # All DB queries
-  r2.py                 # R2 upload/download helpers
-  handlers/
-    browse.py           # Browse flows
-    search.py           # Search command
-    upload.py           # Upload form
-    results.py          # Result card rendering
-    admin.py            # Admin commands
-    callbacks.py        # Inline button router
-```
+- `/review` — work through the review queue one record at a time (approve / edit / skip)
+- `/manage <id>` — edit any record: change series, teacher, title, or soft-delete
+- `/stats` — usage dashboard (users, archive size, top downloads, top searches)
+- `/trust` — grant or revoke trusted-user status
 
 ---
 
@@ -152,23 +160,26 @@ bot/
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env   # fill in your credentials
+cp .env.example .env   # fill in credentials
 python -m bot
 ```
 
-Required environment variables (see `.env.example`):
+Key environment variables (see `.env.example`):
 - `TELEGRAM_BOT_TOKEN`
 - `TG_API_ID`, `TG_API_HASH`, `TG_PHONE`, `TG_GROUP_ID` (Telethon userbot)
 - `SUPABASE_URL`, `SUPABASE_KEY`
-- `R2_ENDPOINT`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_BUCKET`
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
 - `ANTHROPIC_API_KEY`
 - `ADMIN_CHAT_ID`
+
+For large file downloads (>20MB bot API limit), a local Telegram Bot API server can be run via `docker-compose up`.
 
 ---
 
 ## Notes
 
-- The Telethon userbot runs as a regular user account, not a bot — required to read group message history
-- The bot is Hebrew-RTL throughout; all UI strings are in Hebrew
-- `teacher` and `studied_figure` are always separate entities — a shiur *about* a figure by a different teacher is discoverable under both
-- Low-confidence AI tags are never hidden — they show with a warning badge
+- The Telethon userbot runs as a regular user account, not a bot — required to read group message history. `siachbot.session` in the project root holds the Telethon session; always run scripts from the project root.
+- All UI strings are in Hebrew (RTL).
+- `teacher` and `studied_figure` are always separate entities — a shiur *about* a figure by a different teacher is findable under both.
+- Low-confidence AI tags are never hidden — they show with a warning badge.
+- Scripts in `scripts/` use CWD-relative paths for `data/`; always run them from the project root.

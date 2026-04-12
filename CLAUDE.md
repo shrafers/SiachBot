@@ -1,296 +1,265 @@
-# Yeshiva Lessons Telegram Bot
+# SiachBot — Technical Reference
 
-## Project Goal
-Scrape, organize, and serve yeshiva lesson recordings from a Telegram group.
-The group has 158 members and contains audio recordings (m4a/mp3) shared informally — inconsistent naming, no tagging, labels sometimes in separate messages.
+## What this project is
 
-## Tech Stack
-- **Language**: Python
-- **Telegram scraping**: Telethon (userbot, not bot API)
-- **Database**: Supabase (Postgres)
-- **File storage**: Cloudflare R2 (audio files)
-- **Bot**: python-telegram-bot
-- **Hosting**: Railway.app
-- **LLM tagging**: Anthropic Claude API
-- **Search**: Postgres full-text search (no external search engine needed)
+A Telegram bot that archives, tags, and serves yeshiva lesson recordings from a private Telegram group (~158 members). Audio files (m4a/mp3) are shared informally with inconsistent naming. The project:
+1. Scraped all historical messages with Telethon
+2. Tagged each recording with Claude AI (teacher, series, lesson number, studied figures, tags)
+3. Imported structured data into Supabase (Postgres)
+4. Downloaded audio to Cloudflare R2
+5. Runs a Hebrew-language Telegram bot for browse, search, upload, and admin
+
+All pipeline stages (1–6) are complete. Stage 7 (ongoing auto-ingestion) is not yet built.
 
 ---
 
-## Stages Overview
+## Tech stack
 
-| Stage | Name | Status |
-|-------|------|--------|
-| 1 | Scrape metadata | ✅ Done |
-| 2 | Analyze raw data | ✅ Done |
-| 3 | Tag with Claude API | ✅ Done |
-| 4 | Design DB + Import | ✅ Done |
-| 5 | Download audio files | 🔄 In Progress |
-| 6a | Bot core | ✅ Done |
-| 6b | Bot smart features | 🔄 In Progress |
-| 7 | Ongoing ingestion | ⬜ Pending |
+| Concern | Technology |
+|---------|-----------|
+| Language | Python 3.12 |
+| Telegram bot | python-telegram-bot |
+| Telegram scraping / large downloads | Telethon (userbot) |
+| Database | Supabase (Postgres) |
+| File storage | Cloudflare R2 (S3-compatible) |
+| AI tagging | Anthropic Claude API (Batches API) |
+| Hebrew calendar | pyluach |
+| Hosting | Railway.app |
 
 ---
 
-## Stage 4 — Design Database + Import ✅ DONE
+## Directory structure
 
-### Goal
-Design a Supabase schema that serves the bot's search and browse needs, then import tagged_recordings.json. The schema must reflect all facets the bot will query — do not design it as a flat dump.
+```
+bot/                        # Running Telegram bot — Python package
+  __main__.py               # Entry point: python -m bot
+  db.py                     # ONLY place that touches Supabase
+  r2.py                     # R2 upload/download/presigned URLs
+  telethon_client.py        # MTProto client for large file downloads (no 20MB limit)
+  cost_report.py            # Monthly cost email; called by job queue in __main__.py
+  keyboards.py              # All inline/reply keyboard builders
+  utils.py                  # encode_cb/decode_cb, format_result_card, format_duration
+  assets/
+    thanks_image.png        # Image sent as sticker after upload confirm
+  handlers/
+    __init__.py
+    start.py                # /start, /help — registers user in bot_users
+    search.py               # /search flow — free text → DB RPC → paginated results
+    browse.py               # Browse by teacher / series / year / chavura
+    results.py              # Shared helper: render paginated recording list
+    upload.py               # Multi-step upload form → R2 + DB insert
+    admin.py                # /review, /manage, /trust, /stats (admin + trusted users)
+    callbacks.py            # Central router for ALL inline button callbacks
 
-### Schema
+scripts/                    # One-time and pipeline scripts (run from project root)
+  scrape.py                 # Stage 1
+  tag_recordings.py         # Stage 3 — Claude Batches API
+  import_to_supabase.py     # Stage 4 — JSON → DB
+  download_to_r2.py         # Stage 5 — Telegram → R2
+  add_hebrew_dates.py       # Enrich tagged JSON with Hebrew calendar fields
+  backfill_hebrew_year.py   # One-time DB column backfill
+  backfill_file_sizes.py    # One-time DB column backfill
+  apply_series_assignments.py  # Apply manual CSV series assignments to DB
+  build_review_html.py      # Generate interactive HTML to organize series
+  analyze_data.py           # Print stats from tagged JSON
+  export_lists.py           # Export lists to data/full_lists.txt
+  list_groups.py            # Utility: find Telegram group ID
+  run_sql.py                # Utility: run SQL from stdin via psycopg2
 
-```sql
--- Reference tables (controlled vocabularies — insert unique values from JSON first)
-CREATE TABLE teachers (
-  id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  aliases TEXT[] DEFAULT '{}'
-);
+data/                       # Data files — not committed if large
+  all_recordings.json       # Raw scraped metadata (Stage 1 output)
+  tagged_recordings.json    # AI-tagged output (Stage 3 output, source for Stage 4)
+  recordings/               # One JSON per message (Stage 1)
 
-CREATE TABLE subject_areas (
-  id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL
-);
+migrations/                 # Supabase SQL migrations — applied in order
+  01_enable_trgm.sql
+  02_search_text.sql
+  03_stats_tables.sql
+  add_hebrew_year.sql
 
-CREATE TABLE sub_disciplines (
-  id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  subject_area_id INT REFERENCES subject_areas(id)
-);
+sql/                        # Reference SQL — not migrations, not auto-applied
+  schema.sql                # Full schema DDL reference
+  supabase_rpc.sql          # RPC function definitions
+  add_chavurot_subject.sql  # Ad-hoc migration
 
-CREATE TABLE series (
-  id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  teacher_id INT REFERENCES teachers(id),
-  subject_area_id INT REFERENCES subject_areas(id),
-  total_lessons INT
-);
+prompts/
+  tag_recordings.txt        # System prompt for Claude AI tagging (Stage 3)
 
-CREATE TABLE chavurot (
-  id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL
-);
+tests/                      # Manual test scripts
 
-CREATE TABLE studied_figures (
-  id SERIAL PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL
-);
-
--- Main table
-CREATE TABLE recordings (
-  id SERIAL PRIMARY KEY,
-  message_id INT UNIQUE NOT NULL,
-  date DATE,
-  hebrew_date TEXT,
-  semester TEXT,
-  filename TEXT,
-  title TEXT,
-  teacher_id INT REFERENCES teachers(id),
-  subject_area_id INT REFERENCES subject_areas(id),
-  sub_discipline_id INT REFERENCES sub_disciplines(id),
-  series_id INT REFERENCES series(id),
-  lesson_number INT,
-  chavura_id INT REFERENCES chavurot(id),
-  is_oneoff BOOLEAN DEFAULT false,
-  duration_seconds INT,
-  file_size_bytes BIGINT,
-  telegram_link TEXT,
-  audio_downloaded BOOLEAN DEFAULT false,
-  audio_r2_path TEXT,
-  confidence TEXT CHECK (confidence IN ('high', 'medium', 'low')),
-  needs_human_review BOOLEAN DEFAULT false,
-  tagged_by TEXT DEFAULT 'claude',
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Many-to-many
-CREATE TABLE recording_studied_figures (
-  recording_id INT REFERENCES recordings(id) ON DELETE CASCADE,
-  figure_id INT REFERENCES studied_figures(id),
-  PRIMARY KEY (recording_id, figure_id)
-);
-
-CREATE TABLE recording_tags (
-  recording_id INT REFERENCES recordings(id) ON DELETE CASCADE,
-  tag TEXT NOT NULL,
-  PRIMARY KEY (recording_id, tag)
-);
+siachbot.session            # Telethon session file — always run scripts from root
 ```
 
-### Required Indexes
-```sql
-CREATE INDEX ON recordings(teacher_id);
-CREATE INDEX ON recordings(series_id);
-CREATE INDEX ON recordings(subject_area_id);
-CREATE INDEX ON recordings(confidence);
-CREATE INDEX ON recordings(date DESC);
-CREATE INDEX ON recordings(needs_human_review);
-CREATE INDEX ON recordings USING gin(to_tsvector('simple', coalesce(title, '')));
+---
+
+## Database schema
+
+### Core tables
+
+**`recordings`** — main table, one row per lesson
+- `id`, `message_id` (unique — Telegram message ID)
+- `title`, `filename`, `date`, `hebrew_date`, `hebrew_year`, `semester`
+- `teacher_id` → teachers
+- `series_id` → series, `lesson_number`
+- `chavura_id` → chavurot
+- `duration_seconds`, `file_size_bytes`
+- `audio_downloaded` (bool), `audio_r2_path` (e.g. `audio/2024/12345.m4a`)
+- `telegram_link` (fallback if not in R2)
+- `needs_human_review` (bool) — set true for low-confidence, duplicates, manual uploads
+- `deleted_at` (soft delete)
+- `tagged_by` — `'claude'` or `'manual-upload'`
+- `created_at`
+
+**`teachers`** — `id`, `name`
+
+**`series`** — `id`, `name`, `teacher_id`
+
+**`chavurot`** — `id`, `name` (learning groups)
+
+**`studied_figures`** — `id`, `name` (historical/rabbinic figures a shiur is *about*)
+
+### Junction tables
+- **`recording_tags`** — `(recording_id, tag)` — free-form tags
+- **`recording_studied_figures`** — `(recording_id, figure_id)` — many-to-many
+
+### Tracking tables
+- **`trusted_users`** — `telegram_user_id`, `added_by`, `added_at`
+- **`bot_users`** — `user_id`, `username`, `first_seen`, `last_seen`
+- **`user_events`** — `user_id`, `event_type`, `event_data`, `created_at`
+
+### RPC functions (Supabase)
+Called via `supabase.rpc(...)` in `db.py`:
+- `teachers_with_count` — teachers sorted by recording count
+- `series_chronological` / `series_by_teacher_chrono` — series with lesson counts
+- `chavurot_with_count`
+- `hebrew_years_with_count`, `zmanim_by_year_with_count`
+- `get_all_stats`, `top_downloaded_recordings`, `top_search_queries`
+
+> **Note:** `subject_areas` and `sub_disciplines` columns exist in the DB from earlier schema versions but are no longer exposed in the bot UI or upload form. Browse and upload use only: teacher, series, chavura, year/semester.
+
+---
+
+## Bot architecture
+
+### Entry point: `bot/__main__.py`
+- Registers all command handlers, audio handler, text router, and callback handler
+- `_text_router` dispatches free-text messages based on `context.user_data["awaiting"]`
+- Monthly job: `cost_report.run_cost_report()` via job queue (1st of month, 08:00 UTC)
+
+### Database layer: `bot/db.py`
+Single access point for all Supabase queries. Key patterns:
+- Singletons: `get_supabase()` cached per process
+- `_flatten_joins(rec)` — converts Supabase nested join dicts to flat keys (e.g. `teachers.name` → `teacher_name`)
+- Trusted user list cached in-memory with 60s TTL
+- `PAGE_SIZE = 5` (recording lists), `LIST_SIZE = 10` (teacher/series browse lists)
+
+### Callback routing: `bot/handlers/callbacks.py`
+All inline button presses go through `handle_callback()`. Callback data is compact JSON encoded by `utils.encode_cb()` / `utils.decode_cb()` (must fit Telegram's 64-byte limit). Routes by `action` key:
+- Browse: `browse_teachers`, `teacher_recs`, `browse_series`, `series_recs`, `browse_chav`, `browse_zmanim`, `zman_year`, `zman_recs`, `recent`
+- Search: `search_page`, `search_filter`
+- Download: `dl` → fetch from R2 (bytes if ≤20MB, presigned URL if >20MB) or Telegram link
+- Like: `like` → same series → same teacher → same studied figure (fallback chain)
+- Upload form: `up_tea*`, `up_ser*`, `up_skip`, `up_confirm`, `up_edit`, `up_cancel`
+- Admin: `rev_ok`, `rev_skip`, `rev_edit`, `manage`, `mg_*`
+
+### Browse flows: `bot/handlers/browse.py`
+- **By teacher** → teacher list (sorted by count) → teacher's series + "standalone" option → recordings
+- **By series** → all series (chronological) → recordings by lesson_number
+- **By year (zman)** → Hebrew years → semesters (אלול/חורף/קיץ) → recordings
+- **By chavura** → chavura list → recordings
+- **Recent** → last 10 by `created_at DESC`
+
+All lists are paginated using `LIST_SIZE`. All recording pages paginated using `PAGE_SIZE`.
+
+### Upload flow: `bot/handlers/upload.py`
+State machine stored in `context.user_data["upload"]`. Steps:
+1. `teacher` (buttons — common teachers + "others" + "new")
+2. `title` (free text, mandatory)
+3. `series` (buttons — teacher's series + "standalone" + "new")
+4. `lesson_number` (free text, optional; auto-skipped if no series chosen)
+5. `notes` (free text, optional)
+6. Preview → confirm → download from Telegram via Telethon → upload to R2 → insert DB row
+
+On confirm:
+- Generates a fake `message_id` from timestamp
+- R2 path: `audio/{year}/{fake_message_id}.{ext}`
+- Inserts with `needs_human_review = False` (trusted user upload)
+- Notifies `ADMIN_CHAT_ID`
+- Posts audio to `CHANNEL_ID` if set
+- Sends a WebP sticker from `bot/assets/thanks_image.png`
+
+Forwarded files are checked by `message_id` — if found in DB, shows existing record.
+
+### Admin: `bot/handlers/admin.py`
+- `is_admin(user_id)` — checks `ADMIN_CHAT_ID` env var
+- `is_trusted(user_id)` — admin OR in `trusted_users` table (cached 60s)
+- `/review` — shows next `needs_human_review=true` record; approve/skip/edit
+- `/manage <id>` — change series, teacher, title, or soft-delete a recording
+- `/stats` — calls `db.get_stats()` → renders dashboard with user counts, top downloads, top searches
+- `/trust list|add|remove` — manage trusted users
+
+---
+
+## Key patterns and rules
+
+**Running scripts:** Always run from the project root (`python scripts/scrape.py`, not `cd scripts && python scrape.py`). Scripts use CWD-relative paths for `data/` references. `siachbot.session` is resolved from CWD.
+
+**`teacher` vs `studied_figure`:** These are always separate. A shiur *about* Rav Kook taught by Zohar Maor must be findable under both. Never conflate them.
+
+**Deduplication key:** `(date, teacher_id, duration_seconds ±60s)` — duplicates get `needs_human_review = true`.
+
+**`needs_human_review`:** Set true for: low-confidence AI tags, duplicates, manual uploads (via upload form), and records with null title + null teacher. Low-confidence items are never hidden from users — they display normally.
+
+**Soft delete:** `deleted_at` timestamp on `recordings`. DB queries filter `deleted_at IS NULL`.
+
+**R2 downloads:** Files ≤20MB → send bytes directly via bot API. Files >20MB → generate 1-hour presigned URL and send as link. Local Telegram Bot API server (docker-compose) bypasses the 20MB limit entirely.
+
+**Callback data size:** Telegram enforces a 64-byte limit on callback data. `encode_cb()` in `utils.py` packs action + params as compact JSON and raises if over limit.
+
+**Telethon client:** `bot/telethon_client.py` uses `TELEGRAM_BOT_TOKEN` to connect as a bot via MTProto (not the bot API). This allows downloading files larger than 20MB. Session is lazily initialized and auto-reconnects.
+
+---
+
+## Environment variables
+
 ```
+# Telegram bot
+TELEGRAM_BOT_TOKEN
+ADMIN_CHAT_ID
+ADMIN_USERNAME
+CHANNEL_ID          # channel to auto-post new uploads (optional)
+CHANNEL_LINK        # shown in /help
 
-### Import Steps
-1. Load `tagged_recordings.json`
-2. Collect all unique values → insert reference tables first (teachers, subject_areas, sub_disciplines, series, chavurot, studied_figures)
-3. Insert recordings with foreign key lookups
-4. Insert many-to-many rows (recording_studied_figures, recording_tags)
-5. Deduplication: flag recordings with same `(date, teacher_id)` and `duration_seconds` within ±60s — set `needs_human_review = true` on the duplicate
-6. Validation: any recording with null title AND null teacher → set `needs_human_review = true`
+# Telethon userbot (scraping + large downloads)
+TG_API_ID
+TG_API_HASH
+TG_PHONE
+TG_GROUP_ID
 
-### Commit when done
-`git commit -m "stage4: supabase schema + import from tagged JSON"`
+# Supabase
+SUPABASE_URL
+SUPABASE_KEY
+DATABASE_URL        # direct Postgres URL (for psycopg2 in run_sql.py)
 
----
+# Cloudflare R2
+R2_ACCOUNT_ID
+R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY
+R2_BUCKET_NAME
 
-## Stage 5 — Download Audio Files ⬜ PENDING
+# Anthropic (only needed for scripts/tag_recordings.py)
+ANTHROPIC_API_KEY
 
-### Goal
-Download all audio files from Telegram to Cloudflare R2. Update DB records.
+# Cost report email
+GMAIL_SENDER
+GMAIL_APP_PASSWORD
+REPORT_EMAIL
+CF_API_TOKEN        # Cloudflare API token for R2 usage stats
 
-### Steps
-1. Query: `SELECT * FROM recordings WHERE audio_downloaded = false ORDER BY confidence DESC`
-2. For each: download via Telethon using message_id
-3. Upload to R2 at path: `audio/{year}/{message_id}.{ext}`
-4. Update: `audio_r2_path`, `audio_downloaded = true`
-5. Run in batches of 20 — log failures, never crash the full run
+# Fixed monthly costs for report
+RAILWAY_MONTHLY_COST
+SUPABASE_MONTHLY_COST
 
-### Commit when done
-`git commit -m "stage5: audio downloaded to R2"`
-
----
-
-## Stage 6a — Bot Core ✅ DONE
-
-### Goal
-A working Telegram bot: browse, search, download, and upload lessons.
-
-### Commands
-- `/start` — main menu
-- `/search [text]` — free text search (title full-text via Postgres)
-- `/series` — browse series index
-- `/teacher` — browse teachers list
-- `/review` — admin review queue (ADMIN_CHAT_ID only)
-
-### Main Menu (inline keyboard)
+# Local Telegram Bot API server (optional, docker-compose)
+TELEGRAM_LOCAL_SERVER
 ```
-🔍 חיפוש     📚 לפי מרצה
-📂 לפי תחום  📖 סדרות
-🕐 אחרונים
-⬆️ העלאת שיעור
-```
-
-### Browse Flows (implemented)
-- **By teacher** → sorted by recording count → tap teacher → subject areas for that teacher (+ 🕐 אחרונים) → sub-disciplines → recordings
-- **By subject area** → all subject areas → tap area → sub-disciplines (+ 🕐 אחרונים for that area) → recordings
-- **By series** → all series → tap → recordings ordered by lesson_number
-- **Recent** → last 10 recordings by created_at
-
-### Search Logic
-- Postgres `to_tsvector('simple', title)` full-text search, sorted by date DESC
-- Filter buttons: `הכל` | `סדרות בלבד` | `שיעורים בודדים`
-- **⚠️ Still needed (Stage 6b):** expand search to cover teacher name, series name, sub-discipline, tags, studied figures
-
-### Result Card Format
-```
-📖 כותרת השיעור
-👤 מרצה  |  📚 סדרה — שיעור X  |  📅 תאריך
-🏷 תג1, תג2
-⏱ משך
-```
-Buttons: `⬇ הורדה` | `עוד כמו זה` | `◀ הקודם  הבא ▶`
-
-### Download
-- If `audio_r2_path` exists → download from R2 (private bucket) and send bytes via bot
-- If not yet downloaded → send `telegram_link` as fallback
-
-### Upload Flow (no Claude API — fully manual)
-1. User sends audio file (or forwards from group)
-2. Forwarded files: check `message_id` in DB → if found, show existing record (no re-tagging)
-3. New file: step-by-step form with buttons and text inputs:
-   - **מוסר שיעור** *(mandatory)* — buttons: teachers with 10+ lessons | אחרים | מרצה חדש
-   - **תחום** *(mandatory)* — buttons: all subject areas
-   - **תת-תחום** *(mandatory)* — buttons: sub-disciplines for chosen area | תת-תחום חדש
-   - **כותרת השיעור** *(mandatory)* — free text
-   - **סדרה** *(optional)* — buttons: teacher's existing series | שיעור בודד | סדרה חדשה
-   - **מספר שיעור** *(optional, auto-skipped if no series)* — free text or דלג ⏭
-   - **הערות** *(optional)* — free text or דלג ⏭
-4. Preview summary → ✅ אשר | ✏️ ערוך (restart form) | ❌ בטל
-5. On confirm: upload to R2 → insert with `needs_human_review = true` → notify ADMIN_CHAT_ID
-
-### Admin Review Queue
-`/review` — shows one `needs_human_review = true` record at a time
-Buttons: `✅ אשר` | `✏️ ערוך` | `⏭ דלג`
-
-### Sorting
-All lists sort by date DESC. Confidence is not used for display or ranking.
-
----
-
-## Stage 6b — Bot Smart Features 🔄 IN PROGRESS
-
-### Goal
-Layer discovery and quality tools on top of the working core.
-
-### Already Done (in 6a)
-- ✅ Admin review queue (`/review` command)
-- ✅ Recently added (`🕐 אחרונים` → last 10 by `created_at DESC`)
-- ✅ Series navigation prev/next buttons on result cards
-- ✅ "עוד כמו זה" — basic version: same series → same teacher fallback
-
-### Still Needed
-
-**Free text search — expand coverage:**
-Currently only searches `title` via `to_tsvector`. Must expand to:
-- Teacher name (substring match on `teachers.name`)
-- Series name (`series.name`)
-- Sub-discipline name (`sub_disciplines.name`)
-- Tags (`recording_tags.tag`)
-- Studied figures (`studied_figures.name`)
-
-Best approach: Supabase RPC `search_recordings(query text, page int, filter text)` that does a UNION or multi-join search and returns ranked results (date DESC).
-
-**"עוד כמו זה" — full logic:**
-Current: same series → same teacher.
-Full logic: same series → same teacher + same subject_area → same studied_figure.
-Implement as a ranked fallback chain, each returning a fresh result page.
-
-
-### Commit when done
-`git commit -m "stage6b: smart features — full search, discovery, series gaps"`
-
----
-
-## Stage 7 — Ongoing Ingestion ⬜ PENDING
-
-### Goal
-Keep the archive growing as new lessons are shared in the group.
-
-### Steps
-1. Telethon watcher (or scheduled poll every N hours) monitors the group for new audio messages
-2. For each new audio: collect prev/next message context → call Claude API to tag
-3. Auto-insert with `needs_human_review = true` if confidence < high
-4. Notify admin via bot
-
-### Commit when done
-`git commit -m "stage7: ongoing ingestion pipeline"`
-
----
-
-## Critical: Message-to-Recording Linking
-
-For every audio, collect ALL surrounding context. Never decide the label at scrape time — let Claude decide in Stage 3.
-
-**Known patterns:**
-- Descriptive filename: `הרב אלחנן - שותים - 28.5.25.m4a`
-- Caption sent with the file
-- Text message after the file (same sender, <3 min)
-- Text message before the file (same sender, <3 min)
-- No label: filename only
-
----
-
-## Important Rules
-- Always keep raw JSON as backup before any DB operation
-- `teacher` and `studied_figure` are always separate — a shiur about הרב קוק by זוהר מאור must be findable under both
-- Low-confidence items are never hidden — they show with a warning badge and rank lower
-- Deduplication key: `(date, teacher_id, duration_seconds ±60s)`
-- ADMIN_CHAT_ID must be set in env — used for upload notifications and /review queue
-- Mark stages in this file as 🔄 or ✅ as you go. Commit after every stage.
