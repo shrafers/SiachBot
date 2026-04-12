@@ -377,7 +377,7 @@ def get_recent_recordings(limit: int = 10) -> list[dict]:
         sb.table("recordings")
         .select(_recording_select())
         .is_("deleted_at", "null")
-        .order("created_at", desc=True)
+        .order("date", desc=True)
         .limit(limit)
         .execute()
     )
