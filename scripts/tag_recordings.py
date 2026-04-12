@@ -26,7 +26,7 @@ SAVE_EVERY = 50  # write output file every N results processed
 DATA_DIR = "data"
 INPUT_FILE = os.path.join(DATA_DIR, "all_recordings.json")
 OUTPUT_FILE = os.path.join(DATA_DIR, "tagged_recordings.json")
-PROMPT_FILE = "prompt.txt"
+PROMPT_FILE = "prompts/tag_recordings.txt"
 
 # Batches API pricing (50% off standard rates)
 PRICE_CACHE_WRITE_PER_M = 5.00 * 1.25 * 0.5   # $3.125 / 1M tokens

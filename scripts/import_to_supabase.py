@@ -20,7 +20,7 @@ load_dotenv()
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "tagged_recordings.json")
+DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "tagged_recordings.json")
 BATCH_SIZE = 100
 
 

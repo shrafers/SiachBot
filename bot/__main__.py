@@ -112,7 +112,7 @@ def main() -> None:
 
     # Monthly cost report — runs on the 1st of each month at 08:00 UTC
     async def _send_cost_report(context) -> None:
-        from cost_report import run_cost_report
+        from .cost_report import run_cost_report
         try:
             run_cost_report()
         except Exception as exc:

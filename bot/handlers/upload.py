@@ -26,7 +26,7 @@ ADMIN_CHAT_ID = int(os.environ.get("ADMIN_CHAT_ID", "0"))
 def _channel_id():
     return os.environ.get("CHANNEL_ID", "")
 
-_THANKS_IMAGE_PATH = pathlib.Path(__file__).parents[1] / "thanks_image.png"
+_THANKS_IMAGE_PATH = pathlib.Path(__file__).parents[1] / "assets" / "thanks_image.png"
 
 
 def _thanks_sticker_bytes() -> io.BytesIO:
