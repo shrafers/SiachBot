@@ -1,5 +1,6 @@
 # Credentials
 .env
+.claude/settings.json
 
 # Scraped data (can be large)
 data/
