@@ -17,16 +17,16 @@ The group it was built for shares audio files (m4a/mp3) informally — inconsist
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Language | Python 3.12 |
-| Telegram scraping | Telethon (userbot) |
-| Telegram bot | python-telegram-bot |
-| Database | Supabase (Postgres) |
-| File storage | Cloudflare R2 (S3-compatible) |
-| AI tagging | Anthropic Claude API (Batches API) |
-| Hebrew dates | pyluach |
-| Hosting | Railway.app |
+| Layer             | Technology                         |
+| ----------------- | ---------------------------------- |
+| Language          | Python 3.12                        |
+| Telegram scraping | Telethon (userbot)                 |
+| Telegram bot      | python-telegram-bot                |
+| Database          | Supabase (Postgres)                |
+| File storage      | Cloudflare R2 (S3-compatible)      |
+| AI tagging        | Anthropic Claude API (Batches API) |
+| Hebrew dates      | pyluach                            |
+| Hosting           | Railway.app                        |
 
 ---
 

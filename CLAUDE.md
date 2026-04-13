@@ -15,16 +15,16 @@ All pipeline stages (1–6) are complete. Stage 7 (ongoing auto-ingestion) is no
 
 ## Tech stack
 
-| Concern | Technology |
-|---------|-----------|
-| Language | Python 3.12 |
-| Telegram bot | python-telegram-bot |
-| Telegram scraping / large downloads | Telethon (userbot) |
-| Database | Supabase (Postgres) |
-| File storage | Cloudflare R2 (S3-compatible) |
-| AI tagging | Anthropic Claude API (Batches API) |
-| Hebrew calendar | pyluach |
-| Hosting | Railway.app |
+| Concern                             | Technology                         |
+| ----------------------------------- | ---------------------------------- |
+| Language                            | Python 3.12                        |
+| Telegram bot                        | python-telegram-bot                |
+| Telegram scraping / large downloads | Telethon (userbot)                 |
+| Database                            | Supabase (Postgres)                |
+| File storage                        | Cloudflare R2 (S3-compatible)      |
+| AI tagging                          | Anthropic Claude API (Batches API) |
+| Hebrew calendar                     | pyluach                            |
+| Hosting                             | Railway.app                        |
 
 ---
 
